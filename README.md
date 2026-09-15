@@ -25,6 +25,7 @@ index.html                   # 枢纽，链到 /apps/<slug>/
 
 | 路径 | 来源 |
 | --- | --- |
+| [`/apps/clapper/`](apps/clapper/) | [Clapper 开场页氛围](https://x.com/kunchenguid/status/2099627078660624419) |
 | [`/apps/llm-arch-3d/`](apps/llm-arch-3d/) | [大模型架构立体小卡](https://x.com/bbruceyuan/status/2098785251455877338) |
 | [`/apps/remotion-tear/`](apps/remotion-tear/) | [Codex+Remotion 怀旧撕纸短片](https://x.com/xl_lottie/status/2099342984433324435) |
 | [`/apps/obsidian-ui/`](apps/obsidian-ui/) | [ObsidianUI 组件库氛围](https://x.com/dhruvtwt_/status/2099548790470640118) |
@@ -43,7 +44,7 @@ index.html                   # 枢纽，链到 /apps/<slug>/
 5. 保存。之后每次推送新分支都会得到类似地址：
    `https://<branch-name>.bookmark-demo-lab-<hash>.pages.dev`
 
-预览时检查：`/`（枢纽）、`/apps/llm-arch-3d/`、`/apps/remotion-tear/` 和 `/apps/obsidian-ui/`。
+预览时检查：`/`（枢纽）、`/apps/clapper/`、`/apps/llm-arch-3d/`、`/apps/remotion-tear/` 和 `/apps/obsidian-ui/`。
 
 ## Agent 工作流
 
@@ -60,4 +61,4 @@ index.html                   # 枢纽，链到 /apps/<slug>/
 python3 -m http.server 4173
 ```
 
-然后打开 `/`、`/apps/llm-arch-3d/`、`/apps/remotion-tear/` 和 `/apps/obsidian-ui/`。
+然后打开 `/`、`/apps/clapper/`、`/apps/llm-arch-3d/`、`/apps/remotion-tear/` 和 `/apps/obsidian-ui/`。

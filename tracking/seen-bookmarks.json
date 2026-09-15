@@ -2,6 +2,16 @@
   "version": 1,
   "items": [
     {
+      "id": "2099627078660624419",
+      "url": "https://x.com/kunchenguid/status/2099627078660624419",
+      "slug": "clapper",
+      "title": "Clapper intro: write videos in React, render to MP4",
+      "titleZh": "Clapper 开场页：用 React 写片子，渲成 MP4",
+      "author": "kunchenguid",
+      "processedAt": "2026-09-15T01:55:00.000Z",
+      "path": "/apps/clapper/"
+    },
+    {
       "id": "2098785251455877338",
       "url": "https://x.com/bbruceyuan/status/2098785251455877338",
       "slug": "llm-arch-3d",
