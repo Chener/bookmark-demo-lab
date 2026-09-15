@@ -68,7 +68,11 @@ body {
   filter: blur(8px);
 }
 
-.nav,
+.nav {
+  position: relative;
+  z-index: 2;
+}
+
 main,
 .foot {
   position: relative;

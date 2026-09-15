@@ -153,6 +153,7 @@
         end: "+=320%",
         pin: true,
         pinSpacing: true,
+        pinType: "transform",
         scrub: 0.65,
         anticipatePin: 1,
         invalidateOnRefresh: true,
