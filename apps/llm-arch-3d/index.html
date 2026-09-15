@@ -1,0 +1,94 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>大模型架构 · 立体小卡 — bookmark-demo-lab</title>
+  <meta name="description" content="把解码器积木做成可旋转的 3D 小卡：注意力、归一化与混合专家一眼可辨。" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@400;500;700;900&family=JetBrains+Mono:wght@500&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <div class="studio" aria-hidden="true"></div>
+  <div class="vignette" aria-hidden="true"></div>
+
+  <header class="top">
+    <a class="hub" href="/">← 实验室主页</a>
+    <div class="brand">
+      <p class="eyebrow">静态致敬 · 立体小卡</p>
+      <h1>大模型架构图鉴</h1>
+      <p class="lede">平面图纸看不清层叠关系。这里把每张解码器卡片立起来：残差当脊骨，注意力与专家像积木一样可拆。</p>
+    </div>
+    <p class="path"><code>apps/llm-arch-3d</code></p>
+  </header>
+
+  <div class="toolbar" role="toolbar" aria-label="筛选与视角">
+    <div class="filters" data-filters>
+      <button type="button" class="is-on" data-filter="all">全部</button>
+      <button type="button" data-filter="dense">稠密</button>
+      <button type="button" data-filter="moe">混合专家</button>
+      <button type="button" data-filter="mha">多头注意力</button>
+      <button type="button" data-filter="gqa">分组查询</button>
+      <button type="button" data-filter="mla">潜在注意力</button>
+      <button type="button" data-filter="swa">滑动窗口</button>
+    </div>
+    <div class="tools">
+      <button type="button" data-reset>回正视角</button>
+      <span class="hint-inline">拖拽展台 · 悬停拆层 · 点击看清</span>
+    </div>
+  </div>
+
+  <section class="viewport" data-viewport>
+    <div class="stage">
+      <div class="board" data-board></div>
+    </div>
+    <div class="floor" aria-hidden="true"></div>
+  </section>
+
+  <aside class="drawer" data-drawer hidden>
+    <button class="close" type="button" data-close aria-label="关闭拆解">关闭</button>
+    <div class="drawer-grid">
+      <div class="explode-wrap">
+        <p class="explode-kicker" data-explode-kicker>积木拆解</p>
+        <div class="explode" data-explode></div>
+      </div>
+      <div class="facts">
+        <p class="fact-tag" data-fact-tag></p>
+        <h2 data-fact-title></h2>
+        <p class="fact-summary" data-fact-summary></p>
+        <dl class="spec" data-spec></dl>
+        <ul class="bullets" data-bullets></ul>
+      </div>
+    </div>
+  </aside>
+
+  <section class="legend">
+    <h2>读卡图例</h2>
+    <ul>
+      <li><i class="swatch embed"></i>词嵌入 / 位置编码</li>
+      <li><i class="swatch norm"></i>归一化（LayerNorm / RMS / QK）</li>
+      <li><i class="swatch attn"></i>注意力积木</li>
+      <li><i class="swatch ffn"></i>前馈或混合专家</li>
+      <li><i class="swatch head"></i>输出头 / 多 token 预测</li>
+    </ul>
+  </section>
+
+  <footer class="foot">
+    <p>
+      灵感来自
+      <a href="https://x.com/bbruceyuan/status/2098785251455877338">@bbruceyuan</a>
+      想做的「立体版架构卡」，以及
+      <a href="https://sebastianraschka.com/llm-architecture-gallery/">Sebastian Raschka 的 LLM Architecture Gallery</a>。
+      这是原创静态致敬，不是原站源码或海报复制。
+    </p>
+    <a href="/">返回 bookmark-demo-lab</a>
+  </footer>
+
+  <noscript>
+    <p class="noscript">请启用 JavaScript 以旋转并拆解立体小卡。</p>
+  </noscript>
+  <script src="app.js"></script>
+</body>
+</html>
