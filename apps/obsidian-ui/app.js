@@ -14,7 +14,7 @@
     const box = magnet.getBoundingClientRect();
     const t = btn.getBoundingClientRect();
     pill.style.width = `${t.width}px`;
-    pill.style.transform = `translateX(${t.left - box.left - 3.5}px)`;
+    pill.style.transform = `translateX(${t.left - box.left}px)`;
   }
 
   if (magnet) {
@@ -28,6 +28,9 @@
       if (copy) copy.textContent = tabCopy[btn.dataset.tab] || copy.textContent;
     });
     window.addEventListener("resize", () => placePill(magnet.querySelector(".is-on")));
+    if (document.fonts?.ready) {
+      document.fonts.ready.then(() => placePill(magnet.querySelector(".is-on")));
+    }
   }
 
   const otp = document.querySelector("[data-otp]");
@@ -127,7 +130,10 @@
     document.querySelector(btn.dataset.jump)?.scrollIntoView({ behavior: "smooth" });
   });
 
-  document.querySelector(".theme-toggle")?.addEventListener("click", () => {
-    document.body.classList.toggle("dark");
+  const themeBtn = document.querySelector(".theme-toggle");
+  themeBtn?.addEventListener("click", () => {
+    const dark = document.body.classList.toggle("dark");
+    themeBtn.setAttribute("aria-pressed", String(dark));
+    themeBtn.setAttribute("aria-label", dark ? "Switch to light theme" : "Toggle dark theme");
   });
 })();

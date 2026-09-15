@@ -45,16 +45,22 @@ body {
   background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.85' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
 }
 
-.shell {
+.shell,
+.panel {
   position: relative;
   z-index: 2;
-  width: min(1120px, calc(100% - 2rem));
-  margin: 1.25rem auto 2.5rem;
+  width: min(1080px, calc(100% - 3.5rem));
+  margin: 2.4rem auto 0;
   background: var(--card);
   border-radius: var(--radius);
   box-shadow: var(--shadow);
-  padding: 1.15rem 1.6rem 1.6rem;
+  padding: 1.15rem 1.8rem 1.4rem;
   overflow: hidden;
+}
+
+.panel {
+  margin: 1.1rem auto 3rem;
+  padding: 1.4rem 1.8rem 1.3rem;
 }
 
 .nav {
@@ -127,6 +133,9 @@ body {
 }
 
 .icon-btn:hover { background: var(--soft); }
+.theme-toggle .moon { display: none; }
+body.dark .theme-toggle .sun { display: none; }
+body.dark .theme-toggle .moon { display: block; }
 
 .eyebrow {
   display: inline-flex;
@@ -277,9 +286,9 @@ body {
 }
 
 .watermark {
-  margin: 2.5rem 0 0.4rem;
+  margin: 1.6rem 0 0;
   text-align: center;
-  font-size: clamp(4rem, 14vw, 9rem);
+  font-size: clamp(3.2rem, 12vw, 7.4rem);
   font-weight: 800;
   letter-spacing: -0.06em;
   color: #f3f3f4;
@@ -332,7 +341,7 @@ body {
   position: relative;
   display: flex;
   gap: 0.2rem;
-  background: var(--soft);
+  background: #ececef;
   padding: 0.22rem;
   border-radius: 999px;
   width: fit-content;
@@ -435,11 +444,13 @@ body {
   width: 2.2rem;
   height: 2.6rem;
   text-align: center;
-  border: 1px solid var(--line);
+  border: 1.5px solid #c4c4c8;
+  background: #fafafa;
   border-radius: 10px;
   font: inherit;
   font-weight: 700;
   font-size: 1.05rem;
+  color: #111;
 }
 
 .otp input:focus {
@@ -576,7 +587,8 @@ body.dark {
   --shadow: 0 30px 80px rgba(0,0,0,0.45);
 }
 
-body.dark .shell { background: var(--card); }
+body.dark .shell,
+body.dark .panel { background: var(--card); }
 body.dark .diamond,
 body.dark .btn.primary,
 body.dark .arrow-fill,
@@ -599,5 +611,7 @@ body.dark .icon-btn { color: #d4d4d8; }
   .tile.wide { grid-column: auto; }
   .hide-sm { display: none; }
   .links { display: none; }
-  .shell { width: calc(100% - 1rem); margin-top: 0.6rem; padding: 0.9rem 1rem 1.2rem; }
+  .shell,
+  .panel { width: calc(100% - 1rem); margin-top: 0.6rem; padding: 0.9rem 1rem 1.2rem; }
+  .panel { margin-bottom: 1.5rem; }
 }
