@@ -1,63 +1,68 @@
-# rotate-beat（云电脑 cron，不是 Grok Bot）
+# rotate-beat
 
-每个上海整点窗结束时跑一次：结算上一窗 →（可选）摄入刚结束时段的 X 书签增量 → 打开下一窗 → 把 JSON 提交进 git。
+**主调度：Cloudflare Workers Cron Triggers**（`workers/ballot-api`，UTC `0 0,8,16 * * *` ≡ 上海 08:00 / 16:00 / 00:00）。
 
-**不要用 GitHub Issue / 评论当票箱。** 计票只读 Vote Worker（KV）。
+本脚本是 **人工 / 管理员回退**（KV 已转窗后把 JSON 同步进 git，或 Cron 故障时补跑）。**不要**用本机 crontab，**不要**用 Grok Bot routines，**不要**用 GitHub Issue / 评论当票箱。
+
+Worker Cron 只做：KV 读计票 → 结算上一窗 → 打开下一窗写入 KV。不跑 git、不抓 X、不跑 agy / 演示构建。需要 X ingest 或 git push 时看 `GET /api/rotate-status` 的 `needsGitPush` / `needsXIngest`。
 
 ## 前置
 
-- 本仓库 clone，`git` 已登录，能 `git push origin`
+- 本仓库 clone，`git` 已登录（仅回退路径需要 `git push`）
 - `python3` 3.9+（`zoneinfo`）
-- 投票 API 已部署时：环境变量 `VOTE_API_BASE`（或 `tracking/rotate-config.json` 的 `voteApiBase`）+ `BALLOT_ADMIN_TOKEN`
-- X 增量：`X_BEARER_TOKEN` + `X_BOOKMARKS_USER_ID`（没有则 `candidates=[]`，绝不伪造书签）
+- 投票 API 已部署：`VOTE_API_BASE` 或 `tracking/rotate-config.json` 的 `voteApiBase`，管理员操作另需 `BALLOT_ADMIN_TOKEN`
+- X 增量（仅本脚本，Worker 不抓）：`X_BEARER_TOKEN` + `X_BOOKMARKS_USER_ID`（没有则 `candidates=[]`，绝不伪造书签）
 
-## Beat 步骤
+## Worker Cron（主路径）
+
+部署 `ballot-api` 后，Wrangler `[triggers] crons` 会在整点触发 `scheduled`：
+
+1. `fetch` Pages `ORIGIN` 或 GitHub raw 的 `tracking/rotate-config.json`（失败则用 KV 缓存）读取 `periodHours` / `slotHours`
+2. 读 KV `current-window`（没有则 fetch `ballot-window.json`）
+3. 窗未关则跳过
+4. 读 KV `tally:{windowId}` 结算 `winningStack`（真实零票 → `autoPick=true`；缺 tally 当零票）
+5. 打开下一上海窗，写入 KV `current-window` / `window-meta:` / `vote-ledger`
+6. 置 `rotate-status.needsGitPush=true`、`needsXIngest=true` 给后续 harness
+
+`periodHours` 改为 `2` 或 `1` 时，同步改 `slotHours` **以及** `wrangler.toml` 的 cron 表达式。
+
+## 本脚本回退步骤
 
 1. 读 `tracking/rotate-config.json`、`tracking/arsenal.json`、`tracking/ballot-window.json`
 2. 若当前窗仍未关闭则退出 0（`--force` 除外）
-3. `GET {voteApiBase}/api/vote?windowId={prev}` 计票，写入 `tracking/vote-ledger.json` 的 `tallies` + `winningStack`
-   - **真实零票**（接口 `ok` 且 `voteCount=0`）→ `winningStack.autoPick = true`（编排器从军火库 **active** 项自选）
-   - **接口失败 / `voteApiBase` 为空 / 传输错误** → **中止 settle**（非 0 退出）。不把失败当成零票，不改 `vote-ledger` / `ballot-window`，不 git push
+3. 若 Worker `GET /api/window` 已是更新且仍开放的窗，而 git JSON 还是旧窗 → **跳过**（避免盖掉 Cron 已打开的窗）。把 KV 快照同步进 git：`GET /api/window`、`GET /api/ledger`
+4. `GET {voteApiBase}/api/vote?windowId={prev}` 计票，写入 `tracking/vote-ledger.json`
+   - **真实零票**（接口 `ok` 且 `voteCount=0`）→ `winningStack.autoPick = true`
+   - **接口失败 / `voteApiBase` 为空 / 传输错误** → **中止 settle**（非 0 退出）
    - 燃料 / harness / 7×24 按票数取胜；平票按军火库 active 顺序
-   - 模型若写在燃料名里，由编排器从 `winningStack.fuel` 解析
-4. **TODO X ingest**：把刚结束窗 `[opensAt, closesAt)` 的书签增量写成 `candidates[]`（形状见 `scripts/rotate-beat.py` 的 `SAMPLE_CANDIDATE`）。无凭证或未实现则 `candidates=[]`，并在 `ingestNoteZh` 说明
-5. 按上海 `slotHours` 打开下一窗，重写 `ballot-window.json`（`options` 只从 `arsenal.json` **active** 派生）
-6. `PUT {voteApiBase}/api/window` 把新窗快照写入 KV（需 `BALLOT_ADMIN_TOKEN`）
-7. `git add tracking/ballot-window.json tracking/vote-ledger.json && git commit && git push`
+5. **TODO X ingest**：刚结束窗 `[opensAt, closesAt)` 的书签增量。无凭证或未实现则 `candidates=[]`
+6. 按上海 `slotHours` 打开下一窗，重写 `ballot-window.json`
+7. `PUT {voteApiBase}/api/window` 把新窗快照写入 KV（需 `BALLOT_ADMIN_TOKEN`）
+8. `git add tracking/ballot-window.json tracking/vote-ledger.json && git commit && git push`
 
 ## 运行
 
 ```bash
 cd /path/to/bookmark-demo-lab
-./scripts/rotate-beat.sh
-# 或
-python3 scripts/rotate-beat.py --dry-run   # 窗未关则退出 0；窗已关则仍须能 GET 计票，失败则中止（非零）
 python3 scripts/rotate-beat.py --self-test
+python3 scripts/rotate-beat.py --dry-run
 python3 scripts/rotate-beat.py --no-push   # 只本地 commit
+# 管理员强制（窗未关也结算；会覆盖 Worker 当前窗，慎用）
+python3 scripts/rotate-beat.py --force
 ```
 
-## Cron
-
-上海时区（机器 `TZ=Asia/Shanghai` 或 crontab 前 `TZ=Asia/Shanghai`）：
-
-```cron
-0 0,8,16 * * * cd /path/to/bookmark-demo-lab && git pull --ff-only origin main && ./scripts/rotate-beat.sh >> /var/log/rotate-beat.log 2>&1
-```
-
-UTC 等价（`00:00/08:00/16:00` UTC ≡ `08:00/16:00/00:00` 上海）：
-
-```cron
-0 0,8,16 * * * cd /path/to/bookmark-demo-lab && git pull --ff-only origin main && ./scripts/rotate-beat.sh >> /var/log/rotate-beat.log 2>&1
-```
-
-`periodHours` 改为 `2` 或 `1` 时，同步改 `slotHours` 与 cron 表达式。
+`./scripts/rotate-beat.sh` 只是上述 Python 的薄封装，**不是** crontab 入口。
 
 ## 投票 API URL
 
 ```
 GET  {voteApiBase}/api/vote?windowId={windowId}
 POST {voteApiBase}/api/vote
+GET  {voteApiBase}/api/window
 PUT  {voteApiBase}/api/window
+GET  {voteApiBase}/api/ledger
+GET  {voteApiBase}/api/rotate-status
+POST {voteApiBase}/api/rotate          # admin；与 Cron 同一套 slim settle/open
 ```
 
 `voteApiBase` 例：`https://ballot-api.<account>.workers.dev`（不要尾斜杠）。同源路由绑在现有 Pages 主机时可为 `""`，枢纽走 `/api/vote`。

@@ -1,8 +1,10 @@
 #!/usr/bin/env python3
-"""Cloud-computer rotate beat: settle previous window, ingest X increment (TODO), open next ballot.
+"""Manual / admin fallback for ballot rotate.
 
-Not for Grok Bot. Assumes git + optional curl to the Vote Worker on the box.
-Does not use GitHub Issues.
+Primary scheduler is Cloudflare Workers Cron Triggers on workers/ballot-api
+(UTC 0 0,8,16 * * *). This script is not crontab and not a Grok Bot routine.
+
+Use when Cron failed or you need to git-sync KV snapshots. Does not use GitHub Issues.
 """
 from __future__ import annotations
 
@@ -152,6 +154,22 @@ def vote_api_base(cfg: dict) -> str:
     if env:
         return env.rstrip("/")
     return str(cfg.get("voteApiBase") or "").strip().rstrip("/")
+
+
+def fetch_worker_window(base: str) -> dict[str, Any] | None:
+    if not base:
+        return None
+    url = f"{base}/api/window"
+    req = urllib.request.Request(url, method="GET")
+    try:
+        with urllib.request.urlopen(req, timeout=20) as res:
+            data = json.loads(res.read().decode("utf-8"))
+    except (urllib.error.URLError, TimeoutError, json.JSONDecodeError, UnicodeDecodeError, ValueError):
+        return None
+    if not isinstance(data, dict) or not data.get("ok"):
+        return None
+    window = data.get("window")
+    return window if isinstance(window, dict) else None
 
 
 def fetch_tallies(base: str, window_id: str) -> dict[str, Any]:
@@ -366,6 +384,7 @@ def self_test() -> int:
         raise AssertionError("missing windowId must abort")
     except TallyFetchError as exc:
         assert exc.code == "missing_window"
+    assert fetch_worker_window("") is None
     print("self-test ok")
     return 0
 
@@ -391,6 +410,21 @@ def main() -> int:
     if now < closes and not args.force:
         print(f"window {ballot.get('windowId')} still open until {ballot.get('closesAt')}; nothing to settle")
         return 0
+
+    if not args.force:
+        remote_window = fetch_worker_window(vote_api_base(cfg))
+        if remote_window and remote_window.get("windowId") and remote_window.get("closesAt"):
+            try:
+                remote_closes = parse_iso(str(remote_window["closesAt"]))
+            except (TypeError, ValueError):
+                remote_closes = None
+            if remote_closes and now < remote_closes and remote_window.get("windowId") != ballot.get("windowId"):
+                print(
+                    f"Worker Cron already opened {remote_window.get('windowId')} "
+                    f"(git JSON still {ballot.get('windowId')}); skip python settle. "
+                    "Sync KV → git via GET /api/window and GET /api/ledger."
+                )
+                return 0
 
     try:
         settled = settle(ballot, arsenal, cfg)
