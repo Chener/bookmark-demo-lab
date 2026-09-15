@@ -601,11 +601,16 @@ body.dark .arrow-fill { color: #111; }
 body.dark .search-pill,
 body.dark .tile,
 body.dark .spotlight { background: #18181b; color: #f4f4f5; }
+body.dark .magnet { background: #1c1c1f; }
 body.dark .magnet-pill { background: #27272a; }
+body.dark .magnet button { color: var(--muted); }
+body.dark .magnet button.is-on { color: var(--ink); }
 body.dark .watermark { color: #1f1f22; }
 body.dark .otp input,
 body.dark .chip,
 body.dark .eyebrow { border-color: #3f3f46; background: transparent; color: inherit; }
+body.dark .otp input:focus { outline-color: var(--ink); }
+body.dark .spot-bar input { color: inherit; background: transparent; }
 body.dark .links a,
 body.dark .icon-btn { color: #d4d4d8; }
 body.dark .hero-copy p,
