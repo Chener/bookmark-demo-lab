@@ -89,14 +89,14 @@
 
   function openSearch() {
     if (!overlay) return;
-    overlay.hidden = false;
+    overlay.classList.add("is-open");
     spotInput?.focus();
     spotInput?.select();
   }
 
   function closeSearch() {
     if (!overlay) return;
-    overlay.hidden = true;
+    overlay.classList.remove("is-open");
   }
 
   document.querySelectorAll(".search-open").forEach((btn) => {
