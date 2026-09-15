@@ -1,0 +1,178 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>撕纸最小片 — bookmark-demo-lab</title>
+  <meta name="description" content="致敬 Codex + Remotion 的怀旧撕纸短片：报纸底、撕裂转场、六步剪辑思路。静态网页原作致敬。" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@400;500;700;900&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <svg class="svg-defs" width="0" height="0" aria-hidden="true">
+    <defs>
+      <filter id="tear" x="-10%" y="-12%" width="120%" height="124%">
+        <feTurbulence type="fractalNoise" baseFrequency="0.04 0.07" numOctaves="3" seed="12" result="n" />
+        <feDisplacementMap in="SourceGraphic" in2="n" scale="18" xChannelSelector="R" yChannelSelector="G" />
+      </filter>
+      <filter id="tear-sm" x="-8%" y="-18%" width="116%" height="136%">
+        <feTurbulence type="fractalNoise" baseFrequency="0.06 0.1" numOctaves="3" seed="7" result="n" />
+        <feDisplacementMap in="SourceGraphic" in2="n" scale="12" xChannelSelector="R" yChannelSelector="G" />
+      </filter>
+    </defs>
+  </svg>
+
+  <header class="page-bar">
+    <a class="back" href="../../">← 返回实验室</a>
+    <div class="page-titles">
+      <p class="kicker">bookmark-demo-lab · 静态致敬</p>
+      <h1>撕纸最小片</h1>
+    </div>
+    <a class="source" href="https://x.com/xl_lottie/status/2099342984433324435" target="_blank" rel="noopener noreferrer">源书签 @xl_lottie</a>
+  </header>
+
+  <main>
+    <p class="lede">
+      报纸底、撕裂边、红印章。这是一条不走 Remotion 构建流水线的最小片：
+      用网页把原作的怀旧撕纸感觉压成可循环的静态短片。
+    </p>
+
+    <section class="player" aria-label="撕纸最小片播放器">
+      <div class="stage" id="stage" role="img" aria-label="16:9 构图：怀旧报纸上的撕纸短片">
+        <canvas id="newsprint" class="newsprint" aria-hidden="true"></canvas>
+        <div class="fiber" aria-hidden="true"></div>
+        <div class="grain" aria-hidden="true"></div>
+
+        <div class="brand">
+          <span class="avatar" aria-hidden="true">六</span>
+          <span class="brand-name">静态致敬所</span>
+        </div>
+
+        <div class="layer is-on" data-scene="beige"></div>
+
+        <div class="layer" data-scene="title">
+          <div class="burst burst-left" aria-hidden="true">
+            <span class="rays"></span>
+            <span class="quote">“</span>
+          </div>
+          <article class="paper paper-wide">
+            <span class="paper-shadow"></span>
+            <span class="paper-face"></span>
+            <div class="torn-body">
+              <span class="stamp">这条短片</span>
+              <h2><span data-type="a">完全由静态网页</span><span class="comma">，</span><span data-type="b">致敬完成</span></h2>
+            </div>
+          </article>
+          <div class="burst burst-right" aria-hidden="true">
+            <span class="asterisk">✱</span>
+            <span class="rays"></span>
+            <span class="quote">”</span>
+          </div>
+        </div>
+
+        <div class="layer" data-scene="steps">
+          <svg class="snake" viewBox="0 0 920 420" aria-hidden="true">
+            <path class="snake-line" d="M74,302 C140,258 176,228 221,202 C292,155 348,112 405,92 C490,74 540,70 589,76" />
+            <path class="snake-dots" d="M589,76 C652,86 688,122 718,160 C752,202 778,232 810,260" />
+          </svg>
+          <ol class="steps">
+            <li style="--x:8%; --y:72%"><span class="num">01</span><span class="label">定稿配音</span></li>
+            <li style="--x:24%; --y:48%"><span class="num">02</span><span class="label">音频对齐</span></li>
+            <li style="--x:44%; --y:22%"><span class="num">03</span><span class="label">准备素材</span></li>
+            <li style="--x:64%; --y:18%"><span class="num">04</span><span class="label">静态效果</span></li>
+            <li style="--x:78%; --y:38%"><span class="num">05</span><span class="label">动态样片</span></li>
+            <li style="--x:88%; --y:62%"><span class="num">06</span><span class="label">完成整片</span></li>
+          </ol>
+        </div>
+
+        <div class="layer" data-scene="static-first">
+          <article class="paper paper-stack left-stack">
+            <span class="stack-extra"></span>
+            <span class="paper-shadow"></span>
+            <span class="paper-face"></span>
+            <div class="torn-body stack-body">
+              <h3>先确认静态</h3>
+              <p>画面先定下来</p>
+              <span class="mark x-mark" aria-hidden="true">✕</span>
+            </div>
+          </article>
+          <span class="big-arrow" aria-hidden="true">➜</span>
+          <article class="paper paper-stack right-stack">
+            <span class="stack-extra alt"></span>
+            <span class="paper-shadow"></span>
+            <span class="paper-face"></span>
+            <div class="torn-body stack-body">
+              <h3 class="red-head">再做视频</h3>
+              <p>效果更稳定</p>
+              <span class="mark check-mark" aria-hidden="true">✓</span>
+            </div>
+          </article>
+        </div>
+
+        <div class="layer" data-scene="strips">
+          <ul class="strips">
+            <li><span class="strip-face"></span><span class="num">01</span><span class="txt">真实录屏</span></li>
+            <li><span class="strip-face"></span><span class="num">02</span><span class="txt">操作截图</span></li>
+            <li><span class="strip-face"></span><span class="num">03</span><span class="txt">产品 Logo</span></li>
+            <li><span class="strip-face"></span><span class="num">04</span><span class="txt">品牌素材</span></li>
+          </ul>
+        </div>
+
+        <div class="layer" data-scene="end">
+          <article class="paper paper-wide">
+            <span class="paper-shadow"></span>
+            <span class="paper-face"></span>
+            <div class="torn-body">
+              <span class="stamp">最小片</span>
+              <h2>撕开报纸，看见节奏</h2>
+            </div>
+          </article>
+        </div>
+
+        <p class="caption" id="caption">你现在看到的这条短片，完全由静态网页致敬完成。</p>
+      </div>
+
+      <div class="controls">
+        <button type="button" class="play" id="play" aria-pressed="true" aria-label="暂停">暂停</button>
+        <input type="range" id="scrub" min="0" max="539" value="0" step="1" aria-label="时间轴" />
+        <div class="meter">
+          <span id="clock">00:00 / 00:18</span>
+          <span id="frames">第 0 帧</span>
+          <span>30 fps</span>
+        </div>
+        <label class="loop">
+          <input type="checkbox" id="loop" checked />
+          循环
+        </label>
+        <button type="button" class="replay" id="replay">重播</button>
+      </div>
+    </section>
+
+    <aside class="notes">
+      <h2>这条最小片在致敬什么</h2>
+      <p>
+        原书签是 <a href="https://x.com/xl_lottie/status/2099342984433324435">@xl_lottie</a>
+        用 Codex + Remotion 做的怀旧撕纸知识片。原作先定静态构图，再补动态。
+        这里把那套报纸底、撕裂转场、六步思路收成一段可循环的网页短片，不嵌入原视频，也不走 Remotion 构建。
+      </p>
+      <ol>
+        <li>定稿配音：先写逐字稿，再定画幅。</li>
+        <li>音频对齐：字幕、镜头、画面都跟真实语音走。</li>
+        <li>准备素材：录屏、截图、Logo、品牌纸片。</li>
+        <li>静态效果：报纸撕边先画准。</li>
+        <li>动态样片：只动关键镜头。</li>
+        <li>完成整片：补齐、查黑帧、再循环。</li>
+      </ol>
+    </aside>
+  </main>
+
+  <footer class="page-foot">
+    原作静态致敬 · 不含 Workers 与自定义域 ·
+    <a href="https://x.com/xl_lottie/status/2099342984433324435">源帖</a>
+  </footer>
+
+  <script src="app.js"></script>
+</body>
+</html>
