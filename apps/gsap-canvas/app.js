@@ -26,6 +26,11 @@
     },
   ];
 
+  if (hasGsap) {
+    const plugins = [window.ScrollTrigger, window.MotionPathPlugin].filter(Boolean);
+    if (plugins.length) gsap.registerPlugin(...plugins);
+  }
+
   function splitChars(el) {
     const text = el.textContent || "";
     el.textContent = "";
@@ -59,7 +64,6 @@
     });
 
     if (window.MotionPathPlugin) {
-      gsap.registerPlugin(MotionPathPlugin);
       gsap.to("[data-cursor]", {
         motionPath: {
           path: "#orbit-path",
@@ -96,8 +100,8 @@
     const title = document.querySelector("[data-pin-title]");
     const beats = [...document.querySelectorAll("[data-beats] li")];
     const scrub = document.querySelector("[data-scrub]");
-    const wrap = document.querySelector(".pin-wrap");
-    if (!word || !wrap) return;
+    const stage = document.querySelector(".pin-stage");
+    if (!word || !stage) return;
 
     let current = 0;
     const apply = (i, animate) => {
@@ -111,6 +115,7 @@
         kicker.textContent = step.kicker;
         title.textContent = step.title;
         beats.forEach((el, n) => el.classList.toggle("is-on", n === i));
+        if (scrub && !animate) scrub.style.width = `${((i + 1) / 3) * 100}%`;
       };
       if (!hasGsap || reduced || !animate) {
         paint();
@@ -132,23 +137,40 @@
       });
     };
 
-    apply(0, false);
-    if (!hasGsap || reduced) return;
-    if (!window.ScrollTrigger) return;
-    gsap.registerPlugin(ScrollTrigger);
-
-    ScrollTrigger.create({
-      trigger: wrap,
-      start: "top top+=72",
-      end: "+=220%",
-      pin: ".pin-stage",
-      scrub: 0.6,
-      onUpdate: (self) => {
-        const i = Math.min(2, Math.floor(self.progress * 0.999 * 3));
-        apply(i, true);
-        if (scrub) scrub.style.width = `${Math.round(self.progress * 100)}%`;
-      },
+    document.querySelectorAll("[data-beat]").forEach((btn) => {
+      btn.addEventListener("click", () => apply(Number(btn.dataset.beat), true));
     });
+
+    apply(0, false);
+    if (!hasGsap || reduced || !window.ScrollTrigger) return;
+
+    const desktop = window.matchMedia("(min-width: 821px)");
+    const mountPin = () => {
+      if (!desktop.matches) return null;
+      return ScrollTrigger.create({
+        trigger: stage,
+        start: "top 88px",
+        end: "+=320%",
+        pin: true,
+        pinSpacing: true,
+        scrub: 0.65,
+        anticipatePin: 1,
+        invalidateOnRefresh: true,
+        onUpdate: (self) => {
+          const i = Math.min(2, Math.floor(self.progress * 0.999 * 3));
+          apply(i, true);
+          if (scrub) scrub.style.width = `${Math.round(self.progress * 100)}%`;
+        },
+      });
+    };
+
+    let pin = mountPin();
+    desktop.addEventListener("change", () => {
+      pin?.kill();
+      pin = mountPin();
+      ScrollTrigger.refresh();
+    });
+    requestAnimationFrame(() => ScrollTrigger.refresh());
   }
 
   function fitCanvas(canvas) {
@@ -168,6 +190,10 @@
     ["rgba(244,114,182,0.95)", "rgba(251,191,36,0.9)", "rgba(249,115,22,0.85)"],
     ["rgba(167,139,250,0.95)", "rgba(34,211,238,0.9)", "rgba(52,211,153,0.85)"],
   ];
+
+  function fadeRgba(color, alpha) {
+    return color.replace(/rgba\((\d+),\s*(\d+),\s*(\d+),\s*[^)]+\)/, `rgba($1,$2,$3,${alpha})`);
+  }
 
   function initLiquid() {
     const canvas = document.querySelector("[data-liquid]");
@@ -260,22 +286,23 @@
         octx.fillRect(0, 0, w, h);
         const colors = palettes[palette];
         blobs.forEach((b, i) => {
-          const idleX = 0.5 + Math.cos(t / 70 + b.phase) * 0.16;
-          const idleY = 0.48 + Math.sin(t / 80 + b.phase * 1.1) * 0.12;
-          const tx = (pointer.inside ? pointer.x : idleX);
-          const ty = (pointer.inside ? pointer.y : idleY);
-          b.vx += (tx - b.x) * 0.035;
-          b.vy += (ty - b.y) * 0.035;
+          const idleX = 0.38 + (i % 4) * 0.08 + Math.cos(t / 70 + b.phase) * 0.2;
+          const idleY = 0.42 + Math.sin(t / 80 + b.phase * 1.1) * 0.16;
+          const follow = pointer.inside ? (0.18 + (i % 5) * 0.12) : 0;
+          const tx = idleX * (1 - follow) + pointer.x * follow;
+          const ty = idleY * (1 - follow) + pointer.y * follow;
+          b.vx += (tx - b.x) * 0.04;
+          b.vy += (ty - b.y) * 0.04;
           b.vx *= 0.9;
           b.vy *= 0.9;
           b.x += b.vx;
           b.y += b.vy;
           const cx = b.x * w;
           const cy = b.y * h;
-          const rad = b.r * Math.min(w, h) * 1.65;
+          const rad = b.r * Math.min(w, h) * 2.1;
           const g = octx.createRadialGradient(cx, cy, 0, cx, cy, rad);
           g.addColorStop(0, colors[i % colors.length]);
-          g.addColorStop(0.45, colors[i % colors.length].replace("0.9", "0.35").replace("0.95", "0.32").replace("0.85", "0.28"));
+          g.addColorStop(0.42, fadeRgba(colors[i % colors.length], 0.32));
           g.addColorStop(1, "rgba(0,0,0,0)");
           octx.globalCompositeOperation = "screen";
           octx.fillStyle = g;
@@ -311,7 +338,7 @@
     octx.fillText(text, w / 2, h / 2 + 8);
     const data = octx.getImageData(0, 0, w, h).data;
     const pts = [];
-    const gap = 4;
+    const gap = 3;
     for (let y = 0; y < h; y += gap) {
       for (let x = 0; x < w; x += gap) {
         if (data[(y * w + x) * 4 + 3] > 80) {
@@ -330,19 +357,25 @@
     const pointer = { x: 0.5, y: 0.5, active: false };
     let running = true;
     let wordIndex = 0;
+    const label = document.querySelector("[data-word-label]");
     let particles = [];
 
     const spawn = (text) => {
       const pts = sampleWord(text);
-      particles = pts.map((p, i) => ({
-        ox: p.ox,
-        oy: p.oy,
-        x: p.ox + (Math.random() - 0.5) * 0.18,
-        y: p.oy + (Math.random() - 0.5) * 0.22,
-        vx: 0,
-        vy: 0,
-        seed: i,
-      }));
+      const prev = particles;
+      particles = pts.map((p, i) => {
+        const old = prev.length ? prev[i % prev.length] : null;
+        return {
+          ox: p.ox,
+          oy: p.oy,
+          x: old ? old.x : p.ox + (Math.random() - 0.5) * 0.08,
+          y: old ? old.y : p.oy + (Math.random() - 0.5) * 0.08,
+          vx: 0,
+          vy: 0,
+          seed: i,
+        };
+      });
+      if (label) label.textContent = text;
     };
 
     const boot = () => spawn(words[wordIndex]);
@@ -378,8 +411,8 @@
         const size = Math.max(2, 2.4 * dpr);
         particles.forEach((p) => {
           const dist = Math.hypot(p.ox - pointer.x, p.oy - pointer.y);
-          const near = pointer.active ? Math.max(0, 1 - dist / radius) : 0.2;
-          const home = 0.05 + near * 0.28;
+          const near = pointer.active ? Math.max(0, 1 - dist / radius) : 0.55;
+          const home = 0.12 + near * 0.22;
           p.vx += (p.ox - p.x) * home;
           p.vy += (p.oy - p.y) * home;
           if (near < 0.2) {

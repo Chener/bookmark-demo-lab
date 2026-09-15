@@ -265,6 +265,7 @@ h1 .ch {
   padding: 1.4rem 1.5rem 1.2rem;
   box-shadow: var(--shadow);
   backdrop-filter: blur(18px);
+  min-height: min(520px, calc(100vh - 120px));
 }
 
 .stage-label {
@@ -315,15 +316,28 @@ h1 .ch {
 }
 
 .beats li {
-  color: var(--muted);
-  font-size: 0.95rem;
-  padding-left: 0.9rem;
+  padding: 0;
   border-left: 2px solid var(--line);
 }
 
+.beats button {
+  appearance: none;
+  background: none;
+  border: 0;
+  padding: 0.15rem 0 0.15rem 0.9rem;
+  margin: 0;
+  font: inherit;
+  color: var(--muted);
+  cursor: pointer;
+  text-align: left;
+}
+
 .beats li.is-on {
-  color: var(--ink);
   border-left-color: var(--blue);
+}
+
+.beats li.is-on button {
+  color: var(--ink);
   font-weight: 650;
 }
 
