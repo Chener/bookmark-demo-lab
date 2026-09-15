@@ -104,6 +104,11 @@ async function getTallies(url, request, env) {
 }
 
 async function postVote(request, env) {
+  const salt = requireVoteSalt(env);
+  if (!salt) {
+    return json(env, request, { ok: false, error: "misconfigured" }, 503);
+  }
+
   const ip = clientIp(request);
   if (!ip) {
     return json(env, request, { ok: false, error: "no_ip" }, 400);
@@ -165,15 +170,9 @@ async function postVote(request, env) {
     }
   }
 
-  const salt = String(env.VOTE_SALT || "ballot-dev-salt");
   const ipHash = await sha256Hex(salt + "|" + windowId + "|ip|" + ip);
   const votedKey = "voted:" + windowId + ":" + ipHash;
   const ttl = votedTtl(window.periodHours, closes);
-
-  const already = await env.BALLOT_KV.get(votedKey);
-  if (already) {
-    return json(env, request, { ok: false, error: "already_voted" }, 409);
-  }
 
   if (fingerprint) {
     const fpHash = await sha256Hex(salt + "|" + windowId + "|fp|" + fingerprint);
@@ -182,7 +181,6 @@ async function postVote(request, env) {
     if (fpHit) {
       return json(env, request, { ok: false, error: "already_voted" }, 409);
     }
-    await env.BALLOT_KV.put(fpKey, "1", { expirationTtl: ttl });
   }
 
   const coolKey = "cool:" + ipHash;
@@ -191,7 +189,16 @@ async function postVote(request, env) {
     return json(env, request, { ok: false, error: "cooldown" }, 429);
   }
   await env.BALLOT_KV.put(coolKey, "1", { expirationTtl: COOLDOWN_S });
-  await env.BALLOT_KV.put(votedKey, String(now), { expirationTtl: ttl });
+
+  const claimed = await claimExclusive(env.BALLOT_KV, votedKey, ttl);
+  if (!claimed) {
+    return json(env, request, { ok: false, error: "already_voted" }, 409);
+  }
+  if (fingerprint) {
+    const fpHash = await sha256Hex(salt + "|" + windowId + "|fp|" + fingerprint);
+    const fpKey = "fp:" + windowId + ":" + fpHash;
+    await claimExclusive(env.BALLOT_KV, fpKey, ttl);
+  }
 
   const tallyKey = "tally:" + windowId;
   const tallies = (await env.BALLOT_KV.get(tallyKey, "json")) || emptyTallies();
@@ -224,8 +231,25 @@ function votedTtl(periodHours, closesMs) {
   return Math.max(VOTED_TTL_MIN_S, untilClose + periodS + 3600);
 }
 
+function requireVoteSalt(env) {
+  return String(env.VOTE_SALT || "").trim();
+}
+
+async function claimExclusive(kv, key, ttl) {
+  const prior = await kv.get(key);
+  if (prior) return false;
+  const nonce = (crypto.randomUUID && crypto.randomUUID()) ||
+    Array.from(crypto.getRandomValues(new Uint8Array(16)))
+      .map(function (b) { return b.toString(16).padStart(2, "0"); })
+      .join("");
+  await kv.put(key, nonce, { expirationTtl: ttl });
+  const stored = await kv.get(key);
+  return stored === nonce;
+}
+
 async function rateLimit(env, ip) {
-  const salt = String(env.VOTE_SALT || "ballot-dev-salt");
+  const salt = requireVoteSalt(env);
+  if (!salt) return { ok: false };
   const hash = await sha256Hex(salt + "|rl|" + ip);
   const key = "rl:" + hash;
   const n = Number(await env.BALLOT_KV.get(key)) || 0;
@@ -373,7 +397,6 @@ function allowedOrigin(origin, env) {
   if (!origin) return "";
   const configured = String(env.ORIGIN || "").replace(/\/$/, "");
   if (configured && origin === configured) return origin;
-  if (/^https:\/\/[a-z0-9.-]+\.pages\.dev$/i.test(origin)) return origin;
   if (/^http:\/\/localhost(:\d+)?$/.test(origin)) return origin;
   if (/^http:\/\/127\.0\.0\.1(:\d+)?$/.test(origin)) return origin;
   return "";

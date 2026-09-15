@@ -72,7 +72,9 @@ npx wrangler deploy
 
 **IP 去重：** `POST /api/vote` 读取 `CF-Connecting-IP`，与 `windowId` + `VOTE_SALT` 做 SHA-256，KV 键 `voted:{windowId}:{hash}` 命中则 `409 already_voted`。原始 IP 不入库。可选 `fingerprint`（浏览器 UUID）同样哈希后写入 `fp:{windowId}:…`。计票 JSON 在 `tally:{windowId}`。
 
-把 Worker URL 写入 `tracking/rotate-config.json` 的 `voteApiBase`（不要尾斜杠），推 `main` 后枢纽即可跨域 POST（Worker 允许 `*.pages.dev` 与 localhost CORS）。
+把 Worker URL 写入 `tracking/rotate-config.json` 的 `voteApiBase`（不要尾斜杠），推 `main` 后枢纽即可跨域 POST。Worker CORS **只允许** `ORIGIN`（wrangler `[vars]`）与 `localhost` / `127.0.0.1`，不含 `*.pages.dev` 通配。`VOTE_SALT` 未设置时 POST 直接 `503 misconfigured`。
+
+Cron 结算：Vote API 失败或 `voteApiBase` 为空则 **中止**（非零退出），不会写成零票 `autoPick` 并推进下一窗。
 
 ### Cron（云电脑，不是 Grok Bot）
 

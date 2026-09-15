@@ -138,6 +138,15 @@ def plurality(counts: dict[str, int], allowed: list[str]) -> str | None:
     return best
 
 
+class TallyFetchError(Exception):
+    """Vote API was not reached or did not return a usable tally payload."""
+
+    def __init__(self, code: str, detail: str = "") -> None:
+        self.code = code
+        self.detail = detail
+        super().__init__(f"{code}: {detail}" if detail else code)
+
+
 def vote_api_base(cfg: dict) -> str:
     env = os.environ.get("VOTE_API_BASE", "").strip()
     if env:
@@ -145,19 +154,29 @@ def vote_api_base(cfg: dict) -> str:
     return str(cfg.get("voteApiBase") or "").strip().rstrip("/")
 
 
-def fetch_tallies(base: str, window_id: str) -> dict[str, Any] | None:
+def fetch_tallies(base: str, window_id: str) -> dict[str, Any]:
+    if not window_id:
+        raise TallyFetchError("missing_window", "ballot-window.json has no windowId")
     if not base:
-        return None
+        raise TallyFetchError(
+            "no_api",
+            "voteApiBase / VOTE_API_BASE is empty; refusing to treat as zero votes",
+        )
     url = f"{base}/api/vote?windowId={quote(window_id, safe='')}"
     req = urllib.request.Request(url, method="GET")
     try:
         with urllib.request.urlopen(req, timeout=20) as res:
-            data = json.loads(res.read().decode("utf-8"))
-            if data.get("ok"):
-                return data
-    except (urllib.error.URLError, TimeoutError, json.JSONDecodeError, ValueError) as exc:
-        print(f"tally fetch failed: {exc}", file=sys.stderr)
-    return None
+            raw = res.read().decode("utf-8")
+            data = json.loads(raw)
+    except urllib.error.HTTPError as exc:
+        raise TallyFetchError("unavailable", f"HTTP {exc.code} from {url}") from exc
+    except (urllib.error.URLError, TimeoutError) as exc:
+        raise TallyFetchError("unavailable", f"transport error for {url}: {exc}") from exc
+    except (json.JSONDecodeError, UnicodeDecodeError, ValueError) as exc:
+        raise TallyFetchError("unavailable", f"invalid tally JSON from {url}: {exc}") from exc
+    if not isinstance(data, dict) or not data.get("ok"):
+        raise TallyFetchError("unavailable", f"tally payload not ok from {url}")
+    return data
 
 
 def put_window(base: str, token: str, ballot: dict) -> None:
@@ -218,15 +237,10 @@ def settle(ballot: dict, arsenal: dict, cfg: dict) -> dict[str, Any]:
     window_id = ballot.get("windowId")
     options = active_options(arsenal)
     base = vote_api_base(cfg)
-    remote = fetch_tallies(base, str(window_id)) if window_id else None
-    if remote:
-        tallies = remote.get("tallies") or empty_tallies()
-        vote_count = int(remote.get("voteCount") or 0)
-        source = "api"
-    else:
-        tallies = empty_tallies()
-        vote_count = 0
-        source = "unavailable" if base else "no_api"
+    remote = fetch_tallies(base, str(window_id) if window_id else "")
+    tallies = remote.get("tallies") or empty_tallies()
+    vote_count = int(remote.get("voteCount") or 0)
+    source = "api"
 
     auto_pick = vote_count <= 0
     winning = {
@@ -341,6 +355,17 @@ def self_test() -> int:
     assert window_id_for(nstart) == "2026-09-16-00", window_id_for(nstart)
     assert iso_z(nstart) == "2026-09-15T16:00:00.000Z"
     assert iso_z(nend) == "2026-09-16T00:00:00.000Z"
+
+    try:
+        fetch_tallies("", "2026-09-15-16")
+        raise AssertionError("empty voteApiBase must abort")
+    except TallyFetchError as exc:
+        assert exc.code == "no_api"
+    try:
+        fetch_tallies("https://example.invalid", "")
+        raise AssertionError("missing windowId must abort")
+    except TallyFetchError as exc:
+        assert exc.code == "missing_window"
     print("self-test ok")
     return 0
 
@@ -367,7 +392,15 @@ def main() -> int:
         print(f"window {ballot.get('windowId')} still open until {ballot.get('closesAt')}; nothing to settle")
         return 0
 
-    settled = settle(ballot, arsenal, cfg)
+    try:
+        settled = settle(ballot, arsenal, cfg)
+    except TallyFetchError as exc:
+        print(
+            f"ABORT settle: cannot read tallies ({exc}). "
+            "Not treating as zero votes; leaving ballot-window and vote-ledger unchanged; no git push.",
+            file=sys.stderr,
+        )
+        return 2
     want_start, want_end = containing_window(now, cfg)
     # Never reopen the window we just settled; if still inside it (or exactly on close), advance.
     if (

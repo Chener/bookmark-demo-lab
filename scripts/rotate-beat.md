@@ -16,7 +16,8 @@
 1. 读 `tracking/rotate-config.json`、`tracking/arsenal.json`、`tracking/ballot-window.json`
 2. 若当前窗仍未关闭则退出 0（`--force` 除外）
 3. `GET {voteApiBase}/api/vote?windowId={prev}` 计票，写入 `tracking/vote-ledger.json` 的 `tallies` + `winningStack`
-   - 零票或接口不可用 → `winningStack.autoPick = true`（编排器从军火库 **active** 项自选）
+   - **真实零票**（接口 `ok` 且 `voteCount=0`）→ `winningStack.autoPick = true`（编排器从军火库 **active** 项自选）
+   - **接口失败 / `voteApiBase` 为空 / 传输错误** → **中止 settle**（非 0 退出）。不把失败当成零票，不改 `vote-ledger` / `ballot-window`，不 git push
    - 燃料 / harness / 7×24 按票数取胜；平票按军火库 active 顺序
    - 模型若写在燃料名里，由编排器从 `winningStack.fuel` 解析
 4. **TODO X ingest**：把刚结束窗 `[opensAt, closesAt)` 的书签增量写成 `candidates[]`（形状见 `scripts/rotate-beat.py` 的 `SAMPLE_CANDIDATE`）。无凭证或未实现则 `candidates=[]`，并在 `ingestNoteZh` 说明
@@ -30,7 +31,7 @@
 cd /path/to/bookmark-demo-lab
 ./scripts/rotate-beat.sh
 # 或
-python3 scripts/rotate-beat.py --dry-run
+python3 scripts/rotate-beat.py --dry-run   # 窗未关则退出 0；窗已关则仍须能 GET 计票，失败则中止（非零）
 python3 scripts/rotate-beat.py --self-test
 python3 scripts/rotate-beat.py --no-push   # 只本地 commit
 ```

@@ -1026,6 +1026,14 @@
         submitting: false
       };
 
+      function safeHttpUrl(value) {
+        try {
+          const url = new URL(value);
+          if (url.protocol === "https:" || url.protocol === "http:") return url.href;
+        } catch (_) {}
+        return "";
+      }
+
       function setStatus(text, kind) {
         statusEl.textContent = text || "";
         if (kind) statusEl.setAttribute("data-kind", kind);
@@ -1135,13 +1143,14 @@
             plan.textContent = c.planZh;
             body.append(plan);
           }
-          if (c.url) {
+          const originUrl = safeHttpUrl(c.url);
+          if (originUrl) {
             const origin = document.createElement("a");
             origin.className = "origin";
             origin.style.position = "static";
             origin.style.display = "inline-flex";
             origin.style.marginTop = "0.25rem";
-            origin.href = c.url;
+            origin.href = originUrl;
             origin.target = "_blank";
             origin.rel = "noopener noreferrer";
             origin.textContent = "原帖";

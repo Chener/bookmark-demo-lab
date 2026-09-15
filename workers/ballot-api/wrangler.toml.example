@@ -16,9 +16,10 @@ id = "REPLACE_WITH_KV_NAMESPACE_ID"
 # Production Pages origin (Worker fetches ballot-window.json + arsenal.json when KV has no window snapshot).
 ORIGIN = "https://bookmark-demo-lab.pages.dev"
 
-# Secrets (do not put real values here):
-#   npx wrangler secret put VOTE_SALT            # IP/fingerprint hashing salt
+# Secrets (required; do not put real values here):
+#   npx wrangler secret put VOTE_SALT            # required; POST fails 503 if unset (no fallback salt)
 #   npx wrangler secret put BALLOT_ADMIN_TOKEN    # cron PUT /api/window
+# CORS allows ORIGIN above plus localhost / 127.0.0.1 only (no *.pages.dev wildcard).
 #
 # Deploy:
 #   npx wrangler deploy
