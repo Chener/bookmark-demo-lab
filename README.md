@@ -22,11 +22,11 @@ index.html                   # 枢纽：卡片网格 + 军火库 + 原帖链接
 - 枢纽卡片按 **`processedAt` 倒序**（最新在上）。根页运行时读取 `tracking/seen-bookmarks.json` 渲染；新增演示追加 tracking 即可，不必再改枢纽卡片或页脚链接。
 - 每张卡片带「原帖」次要按钮，指向该条的 `url`（X 书签），主点击仍进入 `/apps/<slug>/`。
 - 可选展示字段：`hubTitle`（枢纽短标题）、`blurbZh`（一行简介）。缺省时用 `titleZh`。
-- **技术栈与溯源标签（可选字段）**：
-  - `subscriptionZh`（或英文别名 `subscription`）：订阅级别，如 `Cursor Ultra`。
-  - `modelZh`（或英文别名 `model`）：驱动模型，如 `grok-4.6`、`composer-2.5`；若历史记录不确定填 `模型未记录`。
-  - `harnessZh`（或英文别名 `harness`）：云端 harness / 运行环境，如 `Cursor Cloud Agent`。
-  - 枢纽卡片会自动为订阅、模型、云端 harness 渲染小胶囊标签（chips/tags）；空缺项自动隐藏；标签文本及 `hubTitle` 均纳入即时搜索匹配。
+- **技术栈与溯源标签（可选字段，严格对齐军火库三层顺序：燃料 → harness → 7×24）**：
+  - **第一层 · 燃料 (`tag-fuel`)**：`subscriptionZh` 与 `modelZh`（若两者皆有，合并为一个标签展示，如「`Cursor Ultra · grok-4.6`」；title/aria 标为「燃料」；不单独渲染独立的「模型」标签；亦支持直接配置 `fuelZh` / `fuel`）。
+  - **第二层 · 运行载体 (`tag-harness`)**：`harnessZh`（或英文别名 `harness`），如 `Cursor Cloud Agent`。
+  - **第三层 · 7×24 环境 (`tag-env`)**：`environmentZh`（或别名 `environment` / `cloudZh` / `cloud`），如 `Cursor Cloud Agent 托管机`。
+  - 枢纽卡片严格按 **燃料 → harness → 7×24 环境** 顺序渲染小胶囊标签；空缺项自动隐藏；标签文本、独立字段及 `hubTitle` 均纳入即时搜索匹配。
 - 不要为预览绑定自定义域名。
 
 ### 追踪记录字段规范 (`tracking/seen-bookmarks.json`)
@@ -43,9 +43,10 @@ index.html                   # 枢纽：卡片网格 + 军火库 + 原帖链接
 | `author` | string | 可选 | 原帖作者用户名 / handle |
 | `processedAt` | string | 必选 | ISO 8601 时间戳（如 `2026-09-15T02:56:00.000Z`），枢纽按此倒序排列 |
 | `path` | string | 可选 | 自定义路径，缺省为 `/apps/<slug>/` |
-| `subscriptionZh` / `subscription` | string | 可选 | 订阅级别（如 `Cursor Ultra`），卡片展示为独立小胶囊 |
-| `modelZh` / `model` | string | 可选 | 驱动模型（如 `grok-4.6`、`composer-2.5`；若不确定填 `模型未记录`） |
-| `harnessZh` / `harness` | string | 可选 | 云端 harness / 运行环境（如 `Cursor Cloud Agent`） |
+| `subscriptionZh` / `subscription` | string | 可选 | 订阅级别（如 `Cursor Ultra`），与 `modelZh` 合并展示在第一层「燃料」胶囊（如「`Cursor Ultra · grok-4.6`」） |
+| `modelZh` / `model` | string | 可选 | 驱动模型（如 `grok-4.6`、`composer-2.5`），合并于燃料标签展示，不单设独立中间模型标签 |
+| `harnessZh` / `harness` | string | 可选 | 云端运行载体 / harness（如 `Cursor Cloud Agent`），展示为第二层「harness」胶囊 |
+| `environmentZh` / `environment` | string | 可选 | 7×24 常驻环境（如 `Cursor Cloud Agent 托管机`，支持别名 `cloudZh`/`cloud`），展示为第三层「7×24」胶囊 |
 
 ### 军火库目录规范 (`tracking/arsenal.json`)
 
