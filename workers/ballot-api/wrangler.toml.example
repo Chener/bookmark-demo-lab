@@ -1,0 +1,30 @@
+# Copy to wrangler.toml locally (do not commit the copy).
+# This Worker is the only backend: vote POST + tally GET + KV IP dedupe.
+# Do not create extra Workers/Pages projects, custom domains, CNAME, or Workers Builds.
+
+name = "ballot-api"
+main = "src/index.js"
+compatibility_date = "2026-09-15"
+
+# Dashboard → Workers & Pages → KV → Create namespace named "ballot-votes"
+# then: npx wrangler kv namespace create ballot-votes
+[[kv_namespaces]]
+binding = "BALLOT_KV"
+id = "REPLACE_WITH_KV_NAMESPACE_ID"
+
+[vars]
+# Production Pages origin (Worker fetches ballot-window.json + arsenal.json when KV has no window snapshot).
+ORIGIN = "https://bookmark-demo-lab.pages.dev"
+
+# Secrets (required; do not put real values here):
+#   npx wrangler secret put VOTE_SALT            # required; POST fails 503 if unset (no fallback salt)
+#   npx wrangler secret put BALLOT_ADMIN_TOKEN    # cron PUT /api/window
+# CORS allows ORIGIN above plus localhost / 127.0.0.1 only (no *.pages.dev wildcard).
+#
+# Deploy:
+#   npx wrangler deploy
+# Public URL pattern:
+#   https://ballot-api.<account>.workers.dev/api/vote
+# Optional same-origin (no extra project): add a route on the existing Pages hostname
+#   bookmark-demo-lab.pages.dev/api/*
+# then leave tracking/rotate-config.json voteApiBase as "".

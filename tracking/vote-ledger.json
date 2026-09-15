@@ -1,0 +1,21 @@
+{
+  "version": 1,
+  "lastSettleAt": null,
+  "settledWindowId": null,
+  "voteCount": 0,
+  "tallySource": null,
+  "tallies": {
+    "fuel": {},
+    "harness": {},
+    "environment": {},
+    "candidate": {}
+  },
+  "winningStack": {
+    "fuel": null,
+    "harness": null,
+    "environment": null,
+    "autoPick": true
+  },
+  "winningCandidateId": null,
+  "noteZh": "尚未结算。云电脑 cron 在窗关闭时拉取 Vote Worker 计票并写入本文件；零票则 autoPick=true。"
+}

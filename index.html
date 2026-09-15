@@ -50,6 +50,171 @@
       background-size: 52px 52px;
       mask-image: linear-gradient(180deg, rgba(0, 0, 0, 0.4), transparent 72%);
     }
+    .ballot-wrap {
+      margin: 0 0 1.25rem;
+      padding: 0.9rem 1rem 1rem;
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      background: var(--card);
+    }
+    .ballot-cand .origin {
+      position: static;
+      display: inline-flex;
+      margin-top: 0.28rem;
+    }
+    .ballot-wrap[hidden] { display: none; }
+    .ballot-header {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: flex-end;
+      justify-content: space-between;
+      gap: 0.4rem 1.2rem;
+      margin-bottom: 0.45rem;
+    }
+    .ballot-title {
+      margin: 0;
+      font-size: 1.05rem;
+      font-weight: 700;
+      letter-spacing: -0.02em;
+    }
+    .ballot-meta {
+      margin: 0;
+      color: var(--faint);
+      font-size: 0.76rem;
+      font-variant-numeric: tabular-nums;
+    }
+    .ballot-ingest {
+      margin: 0 0 0.7rem;
+      color: var(--muted);
+      font-size: 0.8rem;
+    }
+    .ballot-cands {
+      display: flex;
+      flex-direction: column;
+      gap: 0.45rem;
+      margin: 0 0 0.75rem;
+    }
+    .ballot-cand {
+      display: grid;
+      grid-template-columns: auto 1fr;
+      gap: 0.45rem 0.6rem;
+      padding: 0.5rem 0.65rem;
+      border: 1px solid rgba(142, 176, 255, 0.1);
+      border-radius: 10px;
+      background: rgba(142, 176, 255, 0.03);
+    }
+    .ballot-cand:hover { border-color: var(--line); }
+    .ballot-cand-title {
+      margin: 0;
+      font-size: 0.86rem;
+      font-weight: 600;
+    }
+    .ballot-cand-author {
+      margin: 0;
+      font: 500 0.68rem/1.3 var(--mono);
+      color: var(--accent);
+    }
+    .ballot-plan {
+      margin: 0.15rem 0 0;
+      color: var(--muted);
+      font-size: 0.76rem;
+      line-height: 1.4;
+      display: -webkit-box;
+      -webkit-line-clamp: 3;
+      line-clamp: 3;
+      -webkit-box-orient: vertical;
+      overflow: hidden;
+    }
+    .ballot-stack {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 0.55rem;
+      margin-bottom: 0.7rem;
+    }
+    .ballot-col {
+      margin: 0;
+      padding: 0;
+      border: 0;
+      min-width: 0;
+    }
+    .ballot-col legend {
+      padding: 0;
+      margin-bottom: 0.35rem;
+      font-size: 0.75rem;
+      font-weight: 600;
+      color: var(--ink);
+    }
+    .ballot-choice {
+      display: flex;
+      align-items: flex-start;
+      gap: 0.38rem;
+      margin: 0 0 0.28rem;
+      font-size: 0.78rem;
+      color: var(--muted);
+      line-height: 1.3;
+    }
+    .ballot-choice input { margin-top: 0.15rem; accent-color: var(--accent); }
+    .ballot-actions {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: 0.55rem 0.8rem;
+    }
+    .ballot-submit {
+      height: 2.2rem;
+      padding: 0 0.95rem;
+      border-radius: 999px;
+      border: 1px solid var(--line-strong);
+      background: rgba(142, 176, 255, 0.12);
+      color: var(--ink);
+      font: 600 0.82rem/1 var(--sans);
+      cursor: pointer;
+    }
+    .ballot-submit:hover:not(:disabled) { background: rgba(142, 176, 255, 0.2); }
+    .ballot-submit:disabled {
+      opacity: 0.45;
+      cursor: not-allowed;
+    }
+    .ballot-hint, .ballot-status {
+      margin: 0;
+      color: var(--faint);
+      font-size: 0.75rem;
+    }
+    .ballot-status[data-kind="ok"] { color: #7ee7c9; }
+    .ballot-status[data-kind="err"] { color: #ffb4a2; }
+    .ballot-tallies {
+      margin-top: 0.75rem;
+      padding-top: 0.65rem;
+      border-top: 1px solid var(--line);
+    }
+    .ballot-tallies h3 {
+      margin: 0 0 0.4rem;
+      font-size: 0.78rem;
+      font-weight: 600;
+      color: var(--muted);
+    }
+    .tally-grid {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 0.45rem 0.8rem;
+      font-size: 0.74rem;
+      color: var(--muted);
+    }
+    .tally-row {
+      display: flex;
+      justify-content: space-between;
+      gap: 0.5rem;
+      font-variant-numeric: tabular-nums;
+    }
+    .tally-row b { font-weight: 600; color: var(--ink); }
+    .ballot-last {
+      margin: 0.45rem 0 0;
+      font-size: 0.74rem;
+      color: var(--faint);
+    }
+    @media (max-width: 720px) {
+      .ballot-stack, .tally-grid { grid-template-columns: 1fr; }
+    }
     .wrap {
       position: relative;
       z-index: 1;
@@ -432,6 +597,27 @@
 
     <p class="banner" id="banner" hidden></p>
 
+    <section class="ballot-wrap" id="ballot" hidden aria-label="待投票 · 本窗方案">
+      <div class="ballot-header">
+        <div>
+          <p class="kicker">本窗方案</p>
+          <h2 class="ballot-title">待投票</h2>
+        </div>
+        <p class="ballot-meta" id="ballot-meta"></p>
+      </div>
+      <p class="ballot-ingest" id="ballot-ingest"></p>
+      <div class="ballot-cands" id="ballot-candidates"></div>
+      <form id="ballot-form" hidden>
+        <div class="ballot-stack" id="ballot-stack"></div>
+        <div class="ballot-actions">
+          <button class="ballot-submit" id="ballot-submit" type="submit">提交本窗投票</button>
+          <p class="ballot-hint">无需登录。同一公网 IP 每个投票窗只能投一次。</p>
+        </div>
+      </form>
+      <p class="ballot-status" id="ballot-status" aria-live="polite"></p>
+      <div class="ballot-tallies" id="ballot-tallies" hidden></div>
+    </section>
+
     <!-- 静态后备：无脚本或无法读取 tracking 时仍可浏览。成功读取 JSON 后由脚本替换。 -->
     <section class="grid" id="grid" aria-label="演示列表">
       <article class="card" data-search="gsap-canvas 审美三件套 审美三件套：product design × gsap × canvas ui product design + gsap + canvas ui gsap 编排 + canvas 流体玻璃 / 粒子揭幕。 btcqzy1 2099440427841597573 cursor ultra · grok-4.6 cursor ultra grok-4.6 cursor cloud agent cursor cloud agent 托管机">
@@ -514,6 +700,7 @@
 
     <footer>
       卡片来自 <code>tracking/seen-bookmarks.json</code>，按处理时间倒序。
+      待投票来自 <code>tracking/ballot-window.json</code>。
       固定路径 <code>/apps/&lt;slug&gt;/</code>。
     </footer>
   </div>
@@ -812,6 +999,403 @@
             arsenalEl.hidden = true;
           });
       }
+    })();
+  </script>
+  <script>
+    (function () {
+      const ballotEl = document.getElementById("ballot");
+      const metaEl = document.getElementById("ballot-meta");
+      const ingestEl = document.getElementById("ballot-ingest");
+      const candsEl = document.getElementById("ballot-candidates");
+      const formEl = document.getElementById("ballot-form");
+      const stackEl = document.getElementById("ballot-stack");
+      const submitBtn = document.getElementById("ballot-submit");
+      const statusEl = document.getElementById("ballot-status");
+      const talliesEl = document.getElementById("ballot-tallies");
+      if (!ballotEl || !formEl) return;
+
+      const FP_KEY = "bdl-vote-fp";
+      const receiptKey = function (windowId) { return "bdl-vote-receipt:" + windowId; };
+      const LABELS = { fuel: "燃料", harness: "Harness", environment: "7×24" };
+      let state = {
+        config: null,
+        ballot: null,
+        arsenal: null,
+        ledger: null,
+        apiOk: false,
+        submitting: false
+      };
+
+      function safeHttpUrl(value) {
+        try {
+          const url = new URL(value);
+          if (url.protocol === "https:" || url.protocol === "http:") return url.href;
+        } catch (_) {}
+        return "";
+      }
+
+      function setStatus(text, kind) {
+        statusEl.textContent = text || "";
+        if (kind) statusEl.setAttribute("data-kind", kind);
+        else statusEl.removeAttribute("data-kind");
+      }
+
+      function fingerprint() {
+        try {
+          let id = localStorage.getItem(FP_KEY);
+          if (!id) {
+            id = (crypto.randomUUID && crypto.randomUUID()) ||
+              ("fp-" + Math.random().toString(36).slice(2) + Date.now().toString(36));
+            localStorage.setItem(FP_KEY, id);
+          }
+          return id;
+        } catch (_) {
+          return "";
+        }
+      }
+
+      function activeFromArsenal(arsenal) {
+        const out = { fuel: [], harness: [], environment: [] };
+        const sections = arsenal && Array.isArray(arsenal.sections) ? arsenal.sections : [];
+        sections.forEach(function (sec) {
+          if (!out[sec.id]) return;
+          (Array.isArray(sec.items) ? sec.items : []).forEach(function (it) {
+            if (!it || it.status !== "active") return;
+            const name = String(it.nameZh || it.name || "").trim();
+            if (name) out[sec.id].push(name);
+          });
+        });
+        return out;
+      }
+
+      function votableOptions() {
+        const fromArsenal = activeFromArsenal(state.arsenal);
+        const fallback = (state.ballot && state.ballot.options) || {};
+        function pick(kind) {
+          return fromArsenal[kind] && fromArsenal[kind].length ? fromArsenal[kind] : (fallback[kind] || []);
+        }
+        return { fuel: pick("fuel"), harness: pick("harness"), environment: pick("environment") };
+      }
+
+      function voteUrl(windowId) {
+        const base = String(state.config && state.config.voteApiBase || "").trim().replace(/\/$/, "");
+        const path = "/api/vote";
+        const root = base ? base + path : path;
+        if (windowId) return root + "?windowId=" + encodeURIComponent(windowId);
+        return root;
+      }
+
+      function shanghaiClock(iso) {
+        try {
+          return new Date(iso).toLocaleString("zh-CN", {
+            timeZone: "Asia/Shanghai",
+            month: "2-digit",
+            day: "2-digit",
+            hour: "2-digit",
+            minute: "2-digit",
+            hour12: false
+          });
+        } catch (_) {
+          return iso;
+        }
+      }
+
+      function windowOpen(ballot) {
+        const now = Date.now();
+        const opens = Date.parse(ballot.opensAt);
+        const closes = Date.parse(ballot.closesAt);
+        return Number.isFinite(opens) && Number.isFinite(closes) && now >= opens && now < closes;
+      }
+
+      function renderCandidates(ballot) {
+        candsEl.replaceChildren();
+        const list = (ballot.candidates || []).filter(function (c) {
+          return c && c.status === "open";
+        });
+        if (!list.length) {
+          const p = document.createElement("p");
+          p.className = "ballot-hint";
+          p.textContent = "本窗暂无书签候选（未伪造 X 帖）。仍可选择下方技术栈。";
+          candsEl.append(p);
+          return;
+        }
+        list.forEach(function (c) {
+          const label = document.createElement("label");
+          label.className = "ballot-cand";
+          const input = document.createElement("input");
+          input.type = "radio";
+          input.name = "candidateId";
+          input.value = String(c.id || "");
+          const body = document.createElement("div");
+          const title = document.createElement("p");
+          title.className = "ballot-cand-title";
+          title.textContent = c.titleZh || c.id || "未命名候选";
+          body.append(title);
+          if (c.author) {
+            const a = document.createElement("p");
+            a.className = "ballot-cand-author";
+            a.textContent = "@" + c.author;
+            body.append(a);
+          }
+          if (c.planZh) {
+            const plan = document.createElement("p");
+            plan.className = "ballot-plan";
+            plan.textContent = c.planZh;
+            body.append(plan);
+          }
+          const originUrl = safeHttpUrl(c.url);
+          if (originUrl) {
+            const origin = document.createElement("a");
+            origin.className = "origin";
+            origin.style.position = "static";
+            origin.style.display = "inline-flex";
+            origin.style.marginTop = "0.25rem";
+            origin.href = originUrl;
+            origin.target = "_blank";
+            origin.rel = "noopener noreferrer";
+            origin.textContent = "原帖";
+            body.append(origin);
+          }
+          label.append(input, body);
+          candsEl.append(label);
+        });
+      }
+
+      function renderStack(options) {
+        stackEl.replaceChildren();
+        ["fuel", "harness", "environment"].forEach(function (kind) {
+          const fs = document.createElement("fieldset");
+          fs.className = "ballot-col";
+          const legend = document.createElement("legend");
+          legend.textContent = LABELS[kind];
+          fs.append(legend);
+          (options[kind] || []).forEach(function (name) {
+            const lab = document.createElement("label");
+            lab.className = "ballot-choice";
+            const input = document.createElement("input");
+            input.type = "radio";
+            input.name = kind;
+            input.value = name;
+            input.required = true;
+            const span = document.createElement("span");
+            span.textContent = name;
+            lab.append(input, span);
+            fs.append(lab);
+          });
+          stackEl.append(fs);
+        });
+      }
+
+      function tallyRows(map) {
+        const frag = document.createDocumentFragment();
+        const keys = Object.keys(map || {});
+        if (!keys.length) {
+          const p = document.createElement("p");
+          p.className = "ballot-hint";
+          p.textContent = "暂无票";
+          frag.append(p);
+          return frag;
+        }
+        keys.sort(function (a, b) { return (map[b] || 0) - (map[a] || 0); });
+        keys.forEach(function (k) {
+          const row = document.createElement("div");
+          row.className = "tally-row";
+          const name = document.createElement("span");
+          name.textContent = k;
+          const n = document.createElement("b");
+          n.textContent = String(map[k]);
+          row.append(name, n);
+          frag.append(row);
+        });
+        return frag;
+      }
+
+      function renderTallies(live, ledger) {
+        talliesEl.replaceChildren();
+        talliesEl.hidden = false;
+        const h = document.createElement("h3");
+        h.textContent = live ? ("本窗实时计票 · " + (live.voteCount || 0) + " 票") : "本窗计票（本地账本）";
+        talliesEl.append(h);
+        const grid = document.createElement("div");
+        grid.className = "tally-grid";
+        const source = (live && live.tallies) || (ledger && ledger.tallies) || {};
+        ["fuel", "harness", "environment"].forEach(function (kind) {
+          const col = document.createElement("div");
+          const title = document.createElement("p");
+          title.style.margin = "0 0 0.25rem";
+          title.textContent = LABELS[kind];
+          col.append(title);
+          col.append(tallyRows(source[kind] || {}));
+          grid.append(col);
+        });
+        talliesEl.append(grid);
+        if (ledger && ledger.winningStack) {
+          const last = document.createElement("p");
+          last.className = "ballot-last";
+          const w = ledger.winningStack;
+          last.textContent = ledger.lastSettleAt
+            ? (w.autoPick
+              ? "上一窗零票 · autoPick，编排器自选军火库启用项。"
+              : "上一窗结算：" + [w.fuel, w.harness, w.environment].filter(Boolean).join(" · "))
+            : "本窗尚未结算。";
+          talliesEl.append(last);
+        }
+      }
+
+      function applyReceipt(ballot) {
+        try {
+          const raw = localStorage.getItem(receiptKey(ballot.windowId));
+          if (!raw) return false;
+          const rec = JSON.parse(raw);
+          if (!rec || rec.windowId !== ballot.windowId) return false;
+          setStatus("本机已在本窗投过票（本地回执）。", "ok");
+          submitBtn.disabled = true;
+          return true;
+        } catch (_) {
+          return false;
+        }
+      }
+
+      function render() {
+        const ballot = state.ballot;
+        if (!ballot || !ballot.windowId) return;
+        ballotEl.hidden = false;
+        metaEl.textContent = "窗 " + ballot.windowId +
+          " · 上海 " + shanghaiClock(ballot.opensAt) + " → " + shanghaiClock(ballot.closesAt);
+        ingestEl.textContent = ballot.ingestNoteZh || "";
+        renderCandidates(ballot);
+        const options = votableOptions();
+        const canVote = options.fuel.length && options.harness.length && options.environment.length;
+        if (canVote) {
+          renderStack(options);
+          formEl.hidden = false;
+        }
+        const open = windowOpen(ballot);
+        const voted = applyReceipt(ballot);
+        if (!state.apiOk) {
+          submitBtn.disabled = true;
+          if (!voted) setStatus("投票接口未绑定。部署 workers/ballot-api 后填写 voteApiBase，或在现有 Pages 主机绑定 /api/*。", "err");
+        } else if (!open) {
+          submitBtn.disabled = true;
+          if (!voted) setStatus("本窗已关闭，等待下一拍结算。", "err");
+        } else if (!voted) {
+          submitBtn.disabled = false;
+          setStatus("");
+        }
+      }
+
+      formEl.addEventListener("submit", function (ev) {
+        ev.preventDefault();
+        if (state.submitting || submitBtn.disabled) return;
+        const ballot = state.ballot;
+        const fd = new FormData(formEl);
+        const payload = {
+          windowId: ballot.windowId,
+          fuel: String(fd.get("fuel") || ""),
+          harness: String(fd.get("harness") || ""),
+          environment: String(fd.get("environment") || ""),
+          candidateId: String(fd.get("candidateId") || ""),
+          fingerprint: fingerprint()
+        };
+        if (!payload.fuel || !payload.harness || !payload.environment) {
+          setStatus("请各选一项燃料、Harness 与 7×24。", "err");
+          return;
+        }
+        state.submitting = true;
+        submitBtn.disabled = true;
+        setStatus("正在提交…");
+        fetch(voteUrl(), {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload)
+        })
+          .then(function (res) { return res.json().then(function (data) { return { res: res, data: data }; }); })
+          .then(function (pack) {
+            const data = pack.data || {};
+            if (pack.res.status === 409 && data.error === "already_voted") {
+              setStatus("该 IP 已在本窗投过票。", "err");
+              try {
+                localStorage.setItem(receiptKey(ballot.windowId), JSON.stringify({
+                  windowId: ballot.windowId, at: new Date().toISOString(), blocked: "already_voted"
+                }));
+              } catch (_) {}
+              return;
+            }
+            if (!data.ok) {
+              const map = {
+                window_closed: "本窗已关闭。",
+                invalid_option: "选项无效（仅可投军火库启用项）。",
+                rate_limited: "请求过于频繁，请稍后再试。",
+                cooldown: "提交过快，请稍候。",
+                unknown_window: "投票窗未同步到接口。"
+              };
+              setStatus(map[data.error] || ("提交失败：" + (data.error || pack.res.status)), "err");
+              submitBtn.disabled = false;
+              return;
+            }
+            try {
+              localStorage.setItem(receiptKey(ballot.windowId), JSON.stringify({
+                windowId: ballot.windowId,
+                at: (data.receipt && data.receipt.at) || new Date().toISOString(),
+                fuel: payload.fuel,
+                harness: payload.harness,
+                environment: payload.environment,
+                candidateId: payload.candidateId || null
+              }));
+            } catch (_) {}
+            setStatus("已记票。同一 IP 本窗不可再投。", "ok");
+            loadTallies(ballot.windowId);
+          })
+          .catch(function () {
+            setStatus("无法连接到投票接口。", "err");
+            submitBtn.disabled = false;
+          })
+          .finally(function () { state.submitting = false; });
+      });
+
+      function loadTallies(windowId) {
+        return fetch(voteUrl(windowId), { cache: "no-store" })
+          .then(function (res) {
+            if (!res.ok) throw new Error("HTTP " + res.status);
+            return res.json();
+          })
+          .then(function (data) {
+            if (!data || !data.ok) throw new Error("bad tally");
+            state.apiOk = true;
+            renderTallies(data, state.ledger);
+            return data;
+          })
+          .catch(function () {
+            state.apiOk = false;
+            if (state.ledger) renderTallies(null, state.ledger);
+            return null;
+          });
+      }
+
+      function loadJson(rel) {
+        return fetch(new URL(rel, window.location.href).href, { cache: "no-store" })
+          .then(function (res) {
+            if (!res.ok) throw new Error("HTTP " + res.status);
+            return res.json();
+          });
+      }
+
+      Promise.all([
+        loadJson("./tracking/rotate-config.json"),
+        loadJson("./tracking/ballot-window.json"),
+        loadJson("./tracking/arsenal.json").catch(function () { return null; }),
+        loadJson("./tracking/vote-ledger.json").catch(function () { return null; })
+      ])
+        .then(function (pack) {
+          state.config = pack[0];
+          state.ballot = pack[1];
+          state.arsenal = pack[2];
+          state.ledger = pack[3];
+          return loadTallies(state.ballot && state.ballot.windowId).then(function () { render(); });
+        })
+        .catch(function () {
+          ballotEl.hidden = true;
+        });
     })();
   </script>
 </body>

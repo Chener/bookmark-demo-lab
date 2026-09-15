@@ -1,0 +1,14 @@
+{
+  "version": 1,
+  "timezone": "Asia/Shanghai",
+  "periodHours": 8,
+  "slotHours": [0, 8, 16],
+  "voteApiBase": "",
+  "notesZh": [
+    "默认 periodHours=8，上海时区整点窗：00:00 / 08:00 / 16:00。之后可改为 2 或 1；改时长时请同步 slotHours（2h→每偶数点；1h→每小时）。",
+    "静态 Pages 无法按 IP 可靠去重。投票只走本仓库 workers/ballot-api（单 Worker + KV），枢纽 fetch voteApiBase + '/api/vote'。voteApiBase 为空时尝试同源 /api/vote（需在现有 Pages 主机上绑 Worker 路由）。",
+    "禁止用 GitHub Issue / 评论当票箱。禁止再开 Pages/Workers 项目、自定义域、CNAME、Workers Builds。",
+    "候选项的燃料 / harness / 7×24 只能来自 arsenal.json 的 active 项；planned 不可投。",
+    "真实零票结算时 winningStack.autoPick=true，编排器可从军火库启用项自选。Vote API 失败或 voteApiBase 为空则中止 settle，不得当成零票推进。"
+  ]
+}
