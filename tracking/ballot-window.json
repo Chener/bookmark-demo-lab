@@ -1,0 +1,28 @@
+{
+  "version": 1,
+  "windowId": "2026-09-15-16",
+  "timezone": "Asia/Shanghai",
+  "periodHours": 8,
+  "opensAt": "2026-09-15T08:00:00.000Z",
+  "closesAt": "2026-09-15T16:00:00.000Z",
+  "candidates": [],
+  "options": {
+    "fuel": [
+      "Cursor Ultra",
+      "Google AI Pro · Antigravity / alphatradebot",
+      "OpenRouter 前沿免费"
+    ],
+    "harness": [
+      "Cursor Cloud Agent",
+      "Cursor CLI",
+      "agy / Antigravity",
+      "pi (OpenRouter 侧)"
+    ],
+    "environment": [
+      "Cursor Cloud Agent 托管机",
+      "Grok Bot 云电脑",
+      "自购 VPS / 便宜 KVM"
+    ]
+  },
+  "ingestNoteZh": "本窗无新书签增量：尚未配置 X 凭证，cron 不会伪造书签。候选名单为空时仍可投燃料 / harness / 7×24。"
+}

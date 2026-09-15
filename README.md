@@ -7,13 +7,88 @@
 ## 布局
 
 ```
-apps/<slug>/                 # 每个选题一个自包含演示
-tracking/seen-bookmarks.json # 已做成应用的 id / url / 技术栈；枢纽运行时读取
-tracking/arsenal.json        # 军火库配置：当前在用与规划中的燃料、Harness 与环境
-index.html                   # 枢纽：卡片网格 + 军火库 + 原帖链接
+apps/<slug>/                      # 每个选题一个自包含演示
+tracking/seen-bookmarks.json      # 已做成应用的 id / url / 技术栈；枢纽运行时读取
+tracking/arsenal.json             # 军火库：燃料 / harness / 7×24（仅 active 可投票）
+tracking/rotate-config.json       # 轮转：时区、periodHours、slotHours、voteApiBase
+tracking/ballot-window.json      # 当前投票窗 + 待投票候选 + 可选项
+tracking/vote-ledger.json         # 上一窗结算账本（winningStack / autoPick）
+workers/ballot-api/               # 唯一后端：投票 Worker + KV（源码；需单独 deploy）
+scripts/rotate-beat.sh            # 云电脑 cron 入口
+index.html                        # 枢纽：卡片 + 待投票 + 军火库 + 原帖
 ```
 
-静态优先，交给 Cloudflare Pages（Framework preset: None，构建命令留空，输出目录 `/`）。不要加 Workers、`wrangler.toml`、自定义域名或 CNAME，也不要另开 Cloudflare 项目。
+枢纽与演示仍是 **静态 Cloudflare Pages**（Framework preset: None，构建命令留空，输出目录 `/`）。不要自定义域名、CNAME、Workers Builds，也不要另开 Pages/Workers 项目。
+
+唯一例外：静态 Pages **无法按 IP 做「每窗一票」**，因此本仓库附带 **一个** Worker + KV（`workers/ballot-api/`），只服务 `GET/POST /api/vote`（及 cron 用的 `PUT /api/window`）。不要再加第二个 Worker 或 Pages Function。仓库里是 `wrangler.toml.example`，避免 Pages 误走 Workers Builds。
+
+## 8 小时投票轮转（上海）
+
+Captain 产品节拍默认 **Asia/Shanghai、periodHours=8**，整点窗 **00:00 / 08:00 / 16:00**。`periodHours` 允许改为 **2** 或 **1**（同时改 `slotHours` 与 cron）。
+
+每个 beat 同时：
+
+1. **结算刚结束的投票窗** → 按 Worker 计票选出下一场演示的燃料 / harness / 7×24（燃料名里若带模型，由编排器解析）。零票则 `winningStack.autoPick=true`，编排器从军火库 **active** 项自选。
+2. **摄入刚结束时段的 X 书签增量** 到枢纽「待投票」，并带自动起草的演示计划预览；该名单是下一窗的选票。无 X 凭证则 `candidates=[]`，**绝不伪造书签**。
+
+### 配置旋钮（`tracking/rotate-config.json`）
+
+| 字段 | 说明 |
+| --- | --- |
+| `timezone` | `Asia/Shanghai` |
+| `periodHours` | 默认 `8`；允许 `2` 或 `1` |
+| `slotHours` | 默认 `[0, 8, 16]`。2h 用偶数点，1h 用 `0..23` |
+| `voteApiBase` | Vote Worker 根 URL，如 `https://ballot-api.<account>.workers.dev`。空字符串表示走同源 `/api/vote`（需在 **现有** Pages 主机绑路由） |
+
+### 枢纽投票 UX
+
+- 区块标题：**待投票 / 本窗方案**。候选项与计划预览来自 `ballot-window.json`；燃料 / harness / 7×24 **只列出军火库 active**（planned 不可投）。
+- 访客 **无需登录**，在页面上直接选三项（可选「优先哪个候选」）后 POST 到 Vote Worker。
+- 提交成功后写入 `localStorage` 回执。同一公网 IP 每个 `windowId` 只能成功一次（Worker + KV 强制）；另有每分钟请求上限与数秒冷却。轻量指纹只作辅助，不是登录。
+- **禁止** GitHub Issue / 评论当票箱，也 **没有** 站外提交 X 链接的表单。
+- 实时计票来自 `GET /api/vote`；接口未绑定时只读 `vote-ledger.json`。
+
+### Vote Worker + KV（最小后端）
+
+源码：`workers/ballot-api/src/index.js`。绑定与部署（在本机/云电脑，**不要**从 Pages 再开项目）：
+
+```bash
+cd workers/ballot-api
+cp wrangler.toml.example wrangler.toml   # 已 gitignore，勿提交
+npx wrangler kv namespace create ballot-votes
+# 把返回的 id 写入 wrangler.toml 的 kv_namespaces.id
+# wrangler.toml [vars] ORIGIN = 现有 Pages 生产 URL
+npx wrangler secret put VOTE_SALT
+npx wrangler secret put BALLOT_ADMIN_TOKEN
+npx wrangler deploy
+```
+
+| 资源 | 名称 |
+| --- | --- |
+| Worker | `ballot-api` |
+| KV namespace | `ballot-votes`（binding `BALLOT_KV`） |
+| 路由 | `https://ballot-api.<account>.workers.dev/api/vote` |
+| 可选同源 | 在 **已有** Pages 主机加 Worker 路由 `…pages.dev/api/*`，然后 `voteApiBase=""` |
+
+**IP 去重：** `POST /api/vote` 读取 `CF-Connecting-IP`，与 `windowId` + `VOTE_SALT` 做 SHA-256，KV 键 `voted:{windowId}:{hash}` 命中则 `409 already_voted`。原始 IP 不入库。可选 `fingerprint`（浏览器 UUID）同样哈希后写入 `fp:{windowId}:…`。计票 JSON 在 `tally:{windowId}`。
+
+把 Worker URL 写入 `tracking/rotate-config.json` 的 `voteApiBase`（不要尾斜杠），推 `main` 后枢纽即可跨域 POST（Worker 允许 `*.pages.dev` 与 localhost CORS）。
+
+### Cron（云电脑，不是 Grok Bot）
+
+详见 `scripts/rotate-beat.md`。机器 `TZ=Asia/Shanghai`：
+
+```cron
+0 0,8,16 * * * cd /path/to/bookmark-demo-lab && git pull --ff-only origin main && ./scripts/rotate-beat.sh >> /var/log/rotate-beat.log 2>&1
+```
+
+UTC 等价（`00:00/08:00/16:00` UTC ≡ `08:00/16:00/00:00` 上海）：
+
+```cron
+0 0,8,16 * * * cd /path/to/bookmark-demo-lab && git pull --ff-only origin main && ./scripts/rotate-beat.sh >> /var/log/rotate-beat.log 2>&1
+```
+
+结算走 `GET {voteApiBase}/api/vote`，**不**调用 `gh issue`。
 
 ## 中文界面约定
 
@@ -99,7 +174,7 @@ index.html                   # 枢纽：卡片网格 + 军火库 + 原帖链接
 5. 保存。之后每次推送新分支都会得到类似地址：
    `https://<branch-name>.bookmark-demo-lab-<hash>.pages.dev`
 
-预览时检查：`/`（枢纽）、`/apps/gsap-canvas/`、`/apps/clapper/`、`/apps/llm-arch-3d/`、`/apps/remotion-tear/` 和 `/apps/obsidian-ui/`。
+预览时检查：`/`（枢纽，含「待投票」）、`/apps/gsap-canvas/`、`/apps/clapper/`、`/apps/llm-arch-3d/`、`/apps/remotion-tear/` 和 `/apps/obsidian-ui/`。Vote Worker 是独立最小后端，不要从 Pages 再开第二个项目。
 
 ## Agent 工作流
 

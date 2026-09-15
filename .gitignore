@@ -2,3 +2,6 @@ node_modules/
 dist/
 .DS_Store
 .wrangler/
+workers/**/wrangler.toml
+workers/**/.dev.vars
+workers/**/node_modules/
