@@ -1,9 +1,9 @@
 <!doctype html>
-<html lang="en">
+<html lang="zh-CN">
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>bookmark-demo-lab</title>
+  <title>书签演示实验室 · bookmark-demo-lab</title>
   <style>
     :root {
       --bg: #0b1020;
@@ -15,7 +15,7 @@
     }
     * { box-sizing: border-box; }
     body {
-      font-family: system-ui, sans-serif;
+      font-family: system-ui, "PingFang SC", "Hiragino Sans GB", "Noto Sans SC", "Microsoft YaHei", sans-serif;
       margin: 0;
       min-height: 100vh;
       background: var(--bg);
@@ -75,21 +75,22 @@
 <body>
   <main>
     <header class="hero">
-      <h1>bookmark-demo-lab</h1>
-      <p>Cloudflare Pages preview base is live.</p>
-      <p>Push a branch → get a preview URL.</p>
-      <p>Sticky monorepo: each pick ships as <code>/apps/&lt;slug&gt;/</code>.</p>
+      <h1>书签演示实验室</h1>
+      <p>Cloudflare Pages 预览基座已上线。</p>
+      <p>推送分支即可获得预览地址。</p>
+      <p>固定单体仓库：每个选题以 <code>/apps/&lt;slug&gt;/</code> 独立上线。</p>
     </header>
-    <section class="grid" aria-label="Demos">
+    <section class="grid" aria-label="演示列表">
+      <!-- 卡片按倒序（最新在上）。新增演示请插到本列表最上方。 -->
       <a class="card" href="apps/obsidian-ui/">
         <span class="tag">apps/obsidian-ui</span>
-        <h2>Obsidian UI</h2>
-        <p>Standalone landing + component showcase inspired by the ObsidianUI React/Tailwind library bookmark.</p>
+        <h2>Obsidian UI 组件库</h2>
+        <p>独立落地页与组件演练场，灵感来自 ObsidianUI 的 React / Tailwind 组件库书签。少把时间耗在反复调界面，把精力留给真正能上线的东西。</p>
       </a>
     </section>
     <footer>
-      Tracking lives in <code>tracking/seen-bookmarks.json</code>.
-      Source bookmark:
+      追踪记录见 <code>tracking/seen-bookmarks.json</code>。
+      来源书签：
       <a href="https://x.com/dhruvtwt_/status/2099548790470640118">x.com/dhruvtwt_</a>
     </footer>
   </main>
