@@ -19,19 +19,19 @@
     {
       id: "steps",
       from: 150,
-      to: 282,
+      to: 258,
       caption: "今天就把整体的剪辑思路拆给你，一共就 6 步。",
     },
     {
       id: "static-first",
-      from: 264,
-      to: 384,
+      from: 252,
+      to: 372,
       caption: "先确认静态构图，再做视频，效果才稳。",
     },
     {
       id: "strips",
-      from: 366,
-      to: 468,
+      from: 360,
+      to: 462,
       caption: "录屏、截图、Logo、品牌，都先撕成纸片。",
     },
     {
@@ -181,9 +181,9 @@
       const a = title.querySelector("[data-type='a']");
       const b = title.querySelector("[data-type='b']");
       const comma = title.querySelector(".comma");
-      if (a) a.style.opacity = local > 16 ? "1" : "0";
-      if (comma) comma.style.opacity = local > 26 ? "1" : "0";
-      if (b) b.style.opacity = local > 32 ? "1" : "0";
+      if (a) a.style.opacity = local > 10 ? "1" : "0";
+      if (comma) comma.style.opacity = local > 18 ? "1" : "0";
+      if (b) b.style.opacity = local > 22 ? "1" : "0";
     }
 
     captionEl.textContent = caption;

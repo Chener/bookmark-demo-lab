@@ -183,6 +183,7 @@ main {
 
 .paper {
   position: relative;
+  z-index: 3;
 }
 
 .paper-wide {
@@ -463,6 +464,7 @@ main {
   font-size: clamp(1rem, 2.5vw, 1.55rem);
   background: transparent;
   white-space: nowrap;
+  isolation: isolate;
   transform: translateX(-12px);
   opacity: 0;
 }
