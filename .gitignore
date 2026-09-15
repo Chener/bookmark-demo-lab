@@ -2,6 +2,8 @@ node_modules/
 dist/
 .DS_Store
 .wrangler/
+__pycache__/
+*.pyc
 workers/**/wrangler.toml
 workers/**/.dev.vars
 workers/**/node_modules/
