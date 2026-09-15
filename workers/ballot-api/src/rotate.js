@@ -358,6 +358,24 @@ export async function persistWindow(kv, ballot) {
   return snapshot;
 }
 
+export function harnessFlagsFrom(prior) {
+  return {
+    needsGitPush: !!(prior && prior.needsGitPush),
+    needsXIngest: !!(prior && prior.needsXIngest)
+  };
+}
+
+export async function ackRotateFlags(kv, patch) {
+  const prior = await kv.get("rotate-status", "json");
+  if (!prior) return { ok: false, error: "missing_status" };
+  const next = Object.assign({}, prior);
+  if (patch && patch.needsGitPush === false) next.needsGitPush = false;
+  if (patch && patch.needsXIngest === false) next.needsXIngest = false;
+  next.ackedAt = isoZ(Date.now());
+  await putJson(kv, "rotate-status", next, STATUS_TTL_S);
+  return { ok: true, status: next };
+}
+
 export async function runRotate(env, opts) {
   const options = opts || {};
   const nowMs = Number(options.nowMs) || Number(options.scheduledTime) || Date.now();
@@ -366,6 +384,18 @@ export async function runRotate(env, opts) {
   const fetchImpl = options.fetchImpl || fetch;
   const kv = env.BALLOT_KV;
   const started = isoZ(nowMs);
+  const priorStatus = await kv.get("rotate-status", "json");
+  const priorFlags = harnessFlagsFrom(priorStatus);
+
+  const writeStatus = async function (status, preserveHarnessFlags) {
+    const next = Object.assign({}, status);
+    if (preserveHarnessFlags) {
+      next.needsGitPush = priorFlags.needsGitPush;
+      next.needsXIngest = priorFlags.needsXIngest;
+    }
+    await putJson(kv, "rotate-status", next, STATUS_TTL_S);
+    return next;
+  };
 
   const fail = async function (error, extra) {
     const status = Object.assign({
@@ -376,16 +406,17 @@ export async function runRotate(env, opts) {
       ok: false,
       action: "error",
       error: error,
-      needsGitPush: false,
-      needsXIngest: false,
+      needsGitPush: priorFlags.needsGitPush,
+      needsXIngest: priorFlags.needsXIngest,
       noteZh: "Worker Cron 失败，未改窗。勿在 Worker 内补跑 git / X / agy。"
     }, extra || {});
     try {
-      await putJson(kv, "rotate-status", status, STATUS_TTL_S);
+      return await writeStatus(status, true);
     } catch (_) {
-      /* still return */
+      status.needsGitPush = priorFlags.needsGitPush;
+      status.needsXIngest = priorFlags.needsXIngest;
+      return status;
     }
-    return status;
   };
 
   if (!options.skipLock) {
@@ -439,7 +470,7 @@ export async function runRotate(env, opts) {
       needsXIngest: true,
       noteZh: "KV 无窗快照，已按 rotate-config 打开当前上海窗。请 harness 把 ballot-window 同步进 git；Worker 未抓 X。"
     };
-    await putJson(kv, "rotate-status", status, STATUS_TTL_S);
+    await writeStatus(status, false);
     return status;
   }
 
@@ -460,11 +491,11 @@ export async function runRotate(env, opts) {
       settledWindowId: null,
       nextWindowId: current.windowId,
       voteCount: 0,
-      needsGitPush: false,
-      needsXIngest: false,
-      noteZh: "当前窗仍未关闭，Worker Cron 跳过。"
+      needsGitPush: priorFlags.needsGitPush,
+      needsXIngest: priorFlags.needsXIngest,
+      noteZh: "当前窗仍未关闭，Worker Cron 跳过。needsGitPush / needsXIngest 沿用上次成功转窗，直至 harness POST /api/rotate-status/ack。"
     };
-    await putJson(kv, "rotate-status", status, STATUS_TTL_S);
+    await writeStatus(status, true);
     return status;
   }
 
@@ -493,8 +524,8 @@ export async function runRotate(env, opts) {
     needsGitPush: true,
     needsXIngest: true,
     noteZh:
-      "Worker Cron 已在 KV 结算上一窗并打开下一窗。未跑 git / X / agy。harness 见 needsGitPush / needsXIngest。"
+      "Worker Cron 已在 KV 结算上一窗并打开下一窗。未跑 git / X / agy。harness 见 needsGitPush / needsXIngest；完成后 POST /api/rotate-status/ack。"
   };
-  await putJson(kv, "rotate-status", status, STATUS_TTL_S);
+  await writeStatus(status, false);
   return status;
 }

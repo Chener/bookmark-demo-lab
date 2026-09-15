@@ -27,7 +27,7 @@ RAW_BASE = "https://raw.githubusercontent.com/Chener/bookmark-demo-lab/main"
 
 # Secrets (required; do not put real values here):
 #   npx wrangler secret put VOTE_SALT            # required; POST fails 503 if unset (no fallback salt)
-#   npx wrangler secret put BALLOT_ADMIN_TOKEN    # admin PUT /api/window and POST /api/rotate
+#   npx wrangler secret put BALLOT_ADMIN_TOKEN    # admin PUT /api/window, POST /api/rotate, POST /api/rotate-status/ack
 # CORS allows ORIGIN above plus localhost / 127.0.0.1 only (no *.pages.dev wildcard).
 #
 # Deploy (from workers/ballot-api, after copying this file to wrangler.toml):

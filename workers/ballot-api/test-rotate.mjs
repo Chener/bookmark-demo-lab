@@ -9,6 +9,7 @@ import {
   settleFromTallies,
   nextBallotSnapshot,
   runRotate,
+  ackRotateFlags,
   periodHours
 } from "./src/rotate.js";
 
@@ -195,6 +196,7 @@ test("runRotate skips while window still open", async () => {
   });
   assert.equal(status.action, "skipped_open");
   assert.equal(status.needsGitPush, false);
+  assert.equal(status.needsXIngest, false);
   const still = await kv.get("current-window", "json");
   assert.equal(still.windowId, "2026-09-15-16");
 });
@@ -311,4 +313,80 @@ test("config fetch fallback to GitHub raw URL", async () => {
   });
   assert.equal(status.ok, true);
   assert.ok(status.action === "rotated" || status.action === "bootstrapped");
+});
+
+test("skip/lock/fail preserve prior needsGitPush and needsXIngest", async () => {
+  const kv = new MemKV();
+  await kv.put("current-window", JSON.stringify({
+    windowId: "2026-09-16-00",
+    opensAt: "2026-09-15T16:00:00.000Z",
+    closesAt: "2026-09-16T00:00:00.000Z",
+    periodHours: 8,
+    candidates: [],
+    options: { fuel: ["Cursor Ultra"], harness: ["Cursor Cloud Agent"], environment: ["Cursor Cloud Agent 托管机"] }
+  }));
+  await kv.put("rotate-status", JSON.stringify({
+    action: "rotated",
+    needsGitPush: true,
+    needsXIngest: true,
+    nextWindowId: "2026-09-16-00"
+  }));
+  const env = { BALLOT_KV: kv, ORIGIN: "https://bookmark-demo-lab.pages.dev" };
+  const skipped = await runRotate(env, {
+    nowMs: parseIso("2026-09-15T20:00:00.000Z"),
+    skipLock: true,
+    fetchImpl: mockFetch()
+  });
+  assert.equal(skipped.action, "skipped_open");
+  assert.equal(skipped.needsGitPush, true);
+  assert.equal(skipped.needsXIngest, true);
+  const storedSkip = await kv.get("rotate-status", "json");
+  assert.equal(storedSkip.needsGitPush, true);
+  assert.equal(storedSkip.needsXIngest, true);
+
+  await kv.put("rotate-lock", "held-by-other");
+  const locked = await runRotate(env, {
+    nowMs: parseIso("2026-09-15T20:00:00.000Z"),
+    skipLock: false,
+    fetchImpl: mockFetch()
+  });
+  assert.equal(locked.error, "locked");
+  assert.equal(locked.needsGitPush, true);
+  assert.equal(locked.needsXIngest, true);
+  const storedLock = await kv.get("rotate-status", "json");
+  assert.equal(storedLock.needsGitPush, true);
+  assert.equal(storedLock.needsXIngest, true);
+
+  await kv.put("current-window", JSON.stringify({
+    windowId: "bad",
+    opensAt: "not-a-date",
+    closesAt: "also-bad"
+  }));
+  const failed = await runRotate(env, {
+    nowMs: parseIso("2026-09-15T20:00:00.000Z"),
+    skipLock: true,
+    fetchImpl: mockFetch()
+  });
+  assert.equal(failed.ok, false);
+  assert.equal(failed.error, "invalid_window");
+  assert.equal(failed.needsGitPush, true);
+  assert.equal(failed.needsXIngest, true);
+});
+
+test("ack endpoint clears only requested harness flags", async () => {
+  const kv = new MemKV();
+  await kv.put("rotate-status", JSON.stringify({
+    action: "rotated",
+    needsGitPush: true,
+    needsXIngest: true
+  }));
+  const gitOnly = await ackRotateFlags(kv, { needsGitPush: false });
+  assert.equal(gitOnly.ok, true);
+  assert.equal(gitOnly.status.needsGitPush, false);
+  assert.equal(gitOnly.status.needsXIngest, true);
+  const both = await ackRotateFlags(kv, { needsGitPush: false, needsXIngest: false });
+  assert.equal(both.status.needsGitPush, false);
+  assert.equal(both.status.needsXIngest, false);
+  const missing = await ackRotateFlags(new MemKV(), { needsGitPush: false });
+  assert.equal(missing.ok, false);
 });

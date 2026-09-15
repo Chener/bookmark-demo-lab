@@ -4,7 +4,7 @@
 
 本脚本是 **人工 / 管理员回退**（KV 已转窗后把 JSON 同步进 git，或 Cron 故障时补跑）。**不要**用本机 crontab，**不要**用 Grok Bot routines，**不要**用 GitHub Issue / 评论当票箱。
 
-Worker Cron 只做：KV 读计票 → 结算上一窗 → 打开下一窗写入 KV。不跑 git、不抓 X、不跑 agy / 演示构建。需要 X ingest 或 git push 时看 `GET /api/rotate-status` 的 `needsGitPush` / `needsXIngest`。
+Worker Cron 只做：KV 读计票 → 结算上一窗 → 打开下一窗写入 KV。不跑 git、不抓 X、不跑 agy / 演示构建。需要 X ingest 或 git push 时看 `GET /api/rotate-status` 的 `needsGitPush` / `needsXIngest`。这些标志只在成功 `rotated` / `bootstrapped` 时置 true；**skip / lock / 失败会读-合并-写，沿用旧值**。Harness 完成后 `POST /api/rotate-status/ack` 显式清掉。
 
 ## 前置
 
@@ -22,7 +22,7 @@ Worker Cron 只做：KV 读计票 → 结算上一窗 → 打开下一窗写入 
 3. 窗未关则跳过
 4. 读 KV `tally:{windowId}` 结算 `winningStack`（真实零票 → `autoPick=true`；缺 tally 当零票）
 5. 打开下一上海窗，写入 KV `current-window` / `window-meta:` / `vote-ledger`
-6. 置 `rotate-status.needsGitPush=true`、`needsXIngest=true` 给后续 harness
+6. 置 `rotate-status.needsGitPush=true`、`needsXIngest=true` 给后续 harness（后续 skip 不会清掉）
 
 `periodHours` 改为 `2` 或 `1` 时，同步改 `slotHours` **以及** `wrangler.toml` 的 cron 表达式。
 
@@ -30,7 +30,7 @@ Worker Cron 只做：KV 读计票 → 结算上一窗 → 打开下一窗写入 
 
 1. 读 `tracking/rotate-config.json`、`tracking/arsenal.json`、`tracking/ballot-window.json`
 2. 若当前窗仍未关闭则退出 0（`--force` 除外）
-3. 若 Worker `GET /api/window` 已是更新且仍开放的窗，而 git JSON 还是旧窗 → **跳过**（避免盖掉 Cron 已打开的窗）。把 KV 快照同步进 git：`GET /api/window`、`GET /api/ledger`
+3. 若 Worker `GET /api/window` 的 `windowId` 已超前 git JSON → **同步 KV→git**（`GET /api/window` + `GET /api/ledger` 写入 `tracking/ballot-window.json` 与 `tracking/vote-ledger.json`，不伪造 X 书签；成功写入后 `POST /api/rotate-status/ack` 只清 `needsGitPush`），然后退出 0，不 settle
 4. `GET {voteApiBase}/api/vote?windowId={prev}` 计票，写入 `tracking/vote-ledger.json`
    - **真实零票**（接口 `ok` 且 `voteCount=0`）→ `winningStack.autoPick = true`
    - **接口失败 / `voteApiBase` 为空 / 传输错误** → **中止 settle**（非 0 退出）
@@ -62,6 +62,7 @@ GET  {voteApiBase}/api/window
 PUT  {voteApiBase}/api/window
 GET  {voteApiBase}/api/ledger
 GET  {voteApiBase}/api/rotate-status
+POST {voteApiBase}/api/rotate-status/ack  # admin；body {"needsGitPush":false,"needsXIngest":false}
 POST {voteApiBase}/api/rotate          # admin；与 Cron 同一套 slim settle/open
 ```
 

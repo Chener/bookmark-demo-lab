@@ -11,6 +11,7 @@
  * PUT  /api/window         (admin; Bearer BALLOT_ADMIN_TOKEN)
  * GET  /api/ledger
  * GET  /api/rotate-status
+ * POST /api/rotate-status/ack  (admin; clear needsGitPush / needsXIngest)
  * POST /api/rotate         (admin; same slim settle/open as Cron)
  *
  * Scheduled: Cloudflare Workers Cron Triggers UTC 0 0,8,16 * * *
@@ -22,6 +23,7 @@ import {
   emptyTallies,
   persistWindow,
   runRotate,
+  ackRotateFlags,
   trackingUrls,
   fetchFirstJson
 } from "./rotate.js";
@@ -76,6 +78,10 @@ async function handle(request, env) {
 
   if (path === "/api/ledger" && request.method === "GET") {
     return getLedger(request, env);
+  }
+
+  if (path === "/api/rotate-status/ack" && request.method === "POST") {
+    return postRotateAck(request, env);
   }
 
   if (path === "/api/rotate-status" && request.method === "GET") {
@@ -141,6 +147,20 @@ async function getRotateStatus(request, env) {
     return json(env, request, { ok: false, error: "missing_status" }, 404);
   }
   return json(env, request, { ok: true, status: status });
+}
+
+async function postRotateAck(request, env) {
+  const token = bearer(request);
+  const expected = String(env.BALLOT_ADMIN_TOKEN || "");
+  if (!expected || token !== expected) {
+    return json(env, request, { ok: false, error: "unauthorized" }, 401);
+  }
+  const body = (await readJson(request)) || {};
+  const result = await ackRotateFlags(env.BALLOT_KV, body);
+  if (!result.ok) {
+    return json(env, request, { ok: false, error: result.error || "missing_status" }, 404);
+  }
+  return json(env, request, { ok: true, status: result.status });
 }
 
 async function postRotate(request, env) {

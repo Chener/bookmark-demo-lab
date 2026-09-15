@@ -98,11 +98,20 @@ Worker CORS **只允许** `ORIGIN`（wrangler `[vars]`）与 `localhost` / `127.
 - 计票直接读 KV `tally:{windowId}`（不 HTTP 自己、不 `gh issue`）
 - 账本与下一窗快照写 KV（`vote-ledger`、`current-window`）
 - **不**跑 agy、git、X 抓取、重演示构建
-- 若还需要 X ingest / git push，只写 KV `rotate-status`（`needsGitPush` / `needsXIngest`）给后续 harness
+- 若还需要 X ingest / git push，只写 KV `rotate-status`（`needsGitPush` / `needsXIngest`）给后续 harness。**skip / lock / 失败不会清掉这些标志**；harness 完成后 `POST /api/rotate-status/ack`（Bearer `BALLOT_ADMIN_TOKEN`，body 里把对应字段设为 `false`）。
 
 改 `periodHours` 时同步改 `slotHours` 与 `wrangler.toml` 的 cron，然后 `npx wrangler deploy`。
 
-管理员可 `POST /api/rotate`（Bearer `BALLOT_ADMIN_TOKEN`）手动跑同一套 slim 转窗。`scripts/rotate-beat.py` 仅作回退（同步 git JSON / Cron 故障）；详见 `scripts/rotate-beat.md`。
+管理员可 `POST /api/rotate`（Bearer `BALLOT_ADMIN_TOKEN`）手动跑同一套 slim 转窗。`scripts/rotate-beat.py` 仅作回退（Worker 窗超前 git 时会 `GET /api/window` + `/api/ledger` 写入 tracking JSON 并 commit；Cron 故障时才自己 settle）；详见 `scripts/rotate-beat.md`。
+
+Harness 清标志：
+
+```bash
+curl -X POST "$VOTE_API_BASE/api/rotate-status/ack" \
+  -H "Authorization: Bearer $BALLOT_ADMIN_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{"needsGitPush":false,"needsXIngest":false}'
+```
 
 python 回退路径：Vote API 失败或 `voteApiBase` 为空则 **中止**（非零退出），不会写成零票 `autoPick` 并推进下一窗。
 
