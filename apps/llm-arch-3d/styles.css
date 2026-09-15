@@ -48,11 +48,17 @@ code, .path {
 }
 
 .top {
-  display: grid;
-  grid-template-columns: auto 1fr auto;
-  gap: 1.5rem;
-  align-items: end;
-  padding: 1.4rem 1.6rem 0.6rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.55rem;
+  padding: 1rem 1.6rem 0.35rem;
+}
+
+.top-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 1rem;
 }
 
 .hub, .foot a {
@@ -114,6 +120,8 @@ h1 {
   cursor: pointer;
   font: inherit;
   font-size: 0.85rem;
+  flex-shrink: 0;
+  min-height: 2rem;
 }
 
 .toolbar button.is-on,
@@ -129,30 +137,34 @@ h1 {
 }
 
 .viewport {
-  height: min(78vh, 820px);
-  min-height: 540px;
+  position: relative;
+  height: auto;
+  min-height: 0;
   perspective: 1600px;
-  overflow: hidden;
+  overflow: visible;
   cursor: grab;
-  touch-action: none;
+  touch-action: pan-y;
+  padding: 1.2rem 0 2.4rem;
 }
 
 .viewport.is-drag { cursor: grabbing; }
 
 .stage {
-  height: 100%;
+  height: auto;
   display: grid;
   place-items: center;
   transform-style: preserve-3d;
+  padding: 1.4rem 0 2.6rem;
 }
 
 .board {
   display: grid;
-  grid-template-columns: repeat(4, 168px);
-  gap: 22px 18px;
+  grid-template-columns: repeat(4, 158px);
+  gap: 18px 14px;
   transform-style: preserve-3d;
-  transform: rotateX(18deg) rotateY(-16deg);
+  transform: rotateX(10deg) rotateY(-10deg);
   transition: transform 80ms linear;
+  transform-origin: center 42%;
 }
 
 .floor {
@@ -165,8 +177,8 @@ h1 {
 }
 
 .card {
-  width: 168px;
-  height: 248px;
+  width: 158px;
+  height: 236px;
   position: relative;
   transform-style: preserve-3d;
   transform: translateZ(0);
@@ -241,7 +253,7 @@ h1 {
 
 .arch {
   position: relative;
-  height: 168px;
+  height: 158px;
   transform-style: preserve-3d;
   border-radius: 14px;
   background: var(--tint, #c5d4e8);
@@ -423,7 +435,7 @@ h1 {
 
 .spec {
   display: grid;
-  grid-template-columns: 7.5rem 1fr;
+  grid-template-columns: 6.2rem 1fr;
   gap: 0.35rem 0.8rem;
   margin: 0 0 0.8rem;
   font-size: 0.92rem;
@@ -487,23 +499,34 @@ h1 {
 }
 
 @media (max-width: 900px) {
-  .top { grid-template-columns: 1fr; }
   .board { grid-template-columns: repeat(3, 150px); gap: 16px; }
-  .card, .card-body { width: 150px; }
+  .card { width: 150px; }
   .drawer-grid { grid-template-columns: 1fr; }
   .hint-inline { display: none; }
 }
 
 @media (max-width: 640px) {
-  .viewport { height: auto; min-height: 0; overflow: visible; cursor: default; }
+  .viewport { cursor: default; touch-action: auto; padding: 0.4rem 0 1.2rem; }
   .board {
-    grid-template-columns: repeat(2, 1fr);
-    width: min(420px, calc(100% - 2rem));
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    width: min(420px, calc(100% - 1.4rem));
     transform: none !important;
     padding: 0.5rem 0 1rem;
+    gap: 12px;
   }
-  .card, .card-body { width: 100%; height: 230px; }
+  .card { width: auto; height: 222px; }
   .card-side, .card-bottom { display: none; }
+  .drawer {
+    inset: auto 0 0 0;
+    max-height: 78vh;
+    overflow: auto;
+    border-radius: 22px 22px 0 0;
+    margin: 0;
+  }
+  .explode-wrap { min-height: 200px; }
+  .explode { height: 210px; }
+  .spec { grid-template-columns: 1fr; }
+  .spec dt { font-size: 0.78rem; }
 }
 
 @media (prefers-reduced-motion: reduce) {

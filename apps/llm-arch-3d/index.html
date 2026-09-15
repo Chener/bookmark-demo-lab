@@ -15,13 +15,15 @@
   <div class="vignette" aria-hidden="true"></div>
 
   <header class="top">
-    <a class="hub" href="/">← 实验室主页</a>
+    <div class="top-row">
+      <a class="hub" href="/">← 实验室主页</a>
+      <p class="path"><code>apps/llm-arch-3d</code></p>
+    </div>
     <div class="brand">
       <p class="eyebrow">静态致敬 · 立体小卡</p>
       <h1>大模型架构图鉴</h1>
       <p class="lede">平面图纸看不清层叠关系。这里把每张解码器卡片立起来：残差当脊骨，注意力与专家像积木一样可拆。</p>
     </div>
-    <p class="path"><code>apps/llm-arch-3d</code></p>
   </header>
 
   <div class="toolbar" role="toolbar" aria-label="筛选与视角">
@@ -68,10 +70,10 @@
     <h2>读卡图例</h2>
     <ul>
       <li><i class="swatch embed"></i>词嵌入 / 位置编码</li>
-      <li><i class="swatch norm"></i>归一化（LayerNorm / RMS / QK）</li>
+      <li><i class="swatch norm"></i>归一化（层归一 / 均方根 / 查询键）</li>
       <li><i class="swatch attn"></i>注意力积木</li>
       <li><i class="swatch ffn"></i>前馈或混合专家</li>
-      <li><i class="swatch head"></i>输出头 / 多 token 预测</li>
+      <li><i class="swatch head"></i>输出头 / 多词预测</li>
     </ul>
   </section>
 
@@ -80,7 +82,7 @@
       灵感来自
       <a href="https://x.com/bbruceyuan/status/2098785251455877338">@bbruceyuan</a>
       想做的「立体版架构卡」，以及
-      <a href="https://sebastianraschka.com/llm-architecture-gallery/">Sebastian Raschka 的 LLM Architecture Gallery</a>。
+      <a href="https://sebastianraschka.com/llm-architecture-gallery/">Sebastian Raschka 的大模型架构图鉴</a>。
       这是原创静态致敬，不是原站源码或海报复制。
     </p>
     <a href="/">返回 bookmark-demo-lab</a>
