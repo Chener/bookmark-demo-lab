@@ -4,123 +4,470 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>书签演示实验室 · bookmark-demo-lab</title>
+  <meta name="description" content="从 X 书签出发的静态技术演示枢纽。按最新倒序浏览，一键打开演示或原帖。" />
   <style>
     :root {
-      --bg: #0b1020;
-      --ink: #e8ecff;
-      --muted: #9aa6d6;
-      --card: #141b33;
-      --line: #243056;
+      --bg: #080b14;
+      --ink: #e8edff;
+      --muted: #8b97c4;
+      --faint: #5e6b94;
+      --card: rgba(16, 22, 42, 0.78);
+      --line: rgba(142, 176, 255, 0.16);
+      --line-strong: rgba(142, 176, 255, 0.38);
       --accent: #8eb0ff;
+      --radius: 14px;
+      --sans: "PingFang SC", "Hiragino Sans GB", "Noto Sans SC", "Microsoft YaHei", system-ui, sans-serif;
+      --mono: ui-monospace, "SFMono-Regular", "JetBrains Mono", Menlo, Consolas, monospace;
     }
     * { box-sizing: border-box; }
+    html, body { margin: 0; min-height: 100%; }
     body {
-      font-family: system-ui, "PingFang SC", "Hiragino Sans GB", "Noto Sans SC", "Microsoft YaHei", sans-serif;
-      margin: 0;
-      min-height: 100vh;
+      font-family: var(--sans);
+      color: var(--ink);
       background: var(--bg);
-      color: var(--ink);
+      line-height: 1.45;
     }
-    main {
-      max-width: 720px;
+    body::before {
+      content: "";
+      position: fixed;
+      inset: 0;
+      z-index: 0;
+      pointer-events: none;
+      background:
+        radial-gradient(ellipse 70% 46% at 8% -8%, rgba(90, 130, 255, 0.16), transparent 55%),
+        radial-gradient(ellipse 46% 36% at 96% 0%, rgba(92, 64, 150, 0.12), transparent 48%),
+        radial-gradient(ellipse 50% 30% at 50% 110%, rgba(18, 50, 80, 0.22), transparent 55%);
+    }
+    body::after {
+      content: "";
+      position: fixed;
+      inset: 0;
+      z-index: 0;
+      pointer-events: none;
+      background-image:
+        linear-gradient(rgba(142, 176, 255, 0.035) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(142, 176, 255, 0.035) 1px, transparent 1px);
+      background-size: 52px 52px;
+      mask-image: linear-gradient(180deg, rgba(0, 0, 0, 0.4), transparent 72%);
+    }
+    .wrap {
+      position: relative;
+      z-index: 1;
+      width: min(960px, calc(100% - 2rem));
       margin: 0 auto;
-      padding: 4rem 1.5rem 5rem;
+      padding: 2.4rem 0 3.5rem;
     }
-    .hero { text-align: center; margin-bottom: 2.5rem; }
-    h1 { font-size: 1.8rem; margin: 0 0 0.6rem; letter-spacing: -0.03em; }
-    .hero p { margin: 0.35rem 0; color: var(--muted); }
-    code {
-      background: #1a2340;
-      padding: 0.2em 0.45em;
-      border-radius: 6px;
-      color: var(--ink);
+    .top {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: flex-end;
+      justify-content: space-between;
+      gap: 1rem 1.5rem;
+      margin-bottom: 1.35rem;
     }
-    .grid {
-      display: grid;
-      gap: 1rem;
-    }
-    a.card {
-      display: block;
-      text-decoration: none;
-      color: inherit;
-      background: var(--card);
-      border: 1px solid var(--line);
-      border-radius: 16px;
-      padding: 1.25rem 1.35rem;
-      transition: border-color 160ms ease, transform 160ms ease;
-    }
-    a.card:hover {
-      border-color: var(--accent);
-      transform: translateY(-2px);
-    }
-    .tag {
-      display: inline-block;
-      font-size: 0.72rem;
-      letter-spacing: 0.04em;
+    .brand { min-width: min(100%, 16rem); }
+    .kicker {
+      margin: 0 0 0.35rem;
+      font: 600 0.7rem/1 var(--mono);
+      letter-spacing: 0.14em;
       text-transform: uppercase;
       color: var(--accent);
-      margin-bottom: 0.45rem;
     }
-    .card h2 { margin: 0 0 0.4rem; font-size: 1.15rem; }
-    .card p { margin: 0; color: var(--muted); font-size: 0.95rem; line-height: 1.45; }
-    footer {
-      margin-top: 2.5rem;
-      text-align: center;
+    h1 {
+      margin: 0;
+      font-size: clamp(1.35rem, 2.4vw, 1.7rem);
+      letter-spacing: -0.03em;
+      font-weight: 700;
+    }
+    .lede {
+      margin: 0.4rem 0 0;
+      color: var(--muted);
+      font-size: 0.92rem;
+      max-width: 36rem;
+    }
+    .tools {
+      display: flex;
+      flex-direction: column;
+      align-items: flex-end;
+      gap: 0.4rem;
+      flex: 1 1 16rem;
+    }
+    label[for="filter"] {
+      position: absolute;
+      width: 1px;
+      height: 1px;
+      overflow: hidden;
+      clip: rect(0 0 0 0);
+    }
+    #filter {
+      width: min(100%, 18rem);
+      height: 2.4rem;
+      padding: 0 0.85rem 0 2.15rem;
+      border: 1px solid var(--line);
+      border-radius: 999px;
+      background:
+        var(--card)
+        url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' fill='none' stroke='%238b97c4' stroke-width='1.6'%3E%3Ccircle cx='7' cy='7' r='4.5'/%3E%3Cpath d='M10.5 10.5 L13.5 13.5' stroke-linecap='round'/%3E%3C/svg%3E")
+        0.8rem 50% / 16px no-repeat;
+      color: var(--ink);
+      font: inherit;
+      outline: none;
+    }
+    #filter::placeholder { color: var(--faint); }
+    #filter:focus {
+      border-color: var(--line-strong);
+      box-shadow: 0 0 0 3px rgba(142, 176, 255, 0.16);
+    }
+    .status {
+      margin: 0;
+      color: var(--faint);
+      font-size: 0.78rem;
+      font-variant-numeric: tabular-nums;
+    }
+    .banner {
+      margin: 0 0 1rem;
+      padding: 0.7rem 0.9rem;
+      border: 1px solid var(--line);
+      border-radius: 10px;
+      background: rgba(142, 176, 255, 0.06);
       color: var(--muted);
       font-size: 0.85rem;
     }
-    footer a { color: var(--accent); }
+    .banner[hidden] { display: none; }
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+      gap: 0.7rem;
+    }
+    .card {
+      position: relative;
+      display: flex;
+      background: var(--card);
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      min-height: 7.1rem;
+      transition: border-color 140ms ease, transform 140ms ease, background 140ms ease;
+    }
+    .card:hover,
+    .card:focus-within {
+      border-color: var(--line-strong);
+      transform: translateY(-1px);
+      background: rgba(20, 28, 52, 0.9);
+    }
+    .card-body {
+      display: flex;
+      flex-direction: column;
+      gap: 0.28rem;
+      flex: 1;
+      padding: 0.9rem 4.6rem 0.9rem 1rem;
+      color: inherit;
+      text-decoration: none;
+      min-width: 0;
+    }
+    .card-body:focus-visible {
+      outline: 2px solid var(--accent);
+      outline-offset: -3px;
+      border-radius: var(--radius);
+    }
+    .slug {
+      font: 500 0.7rem/1.2 var(--mono);
+      letter-spacing: 0.02em;
+      color: var(--accent);
+    }
+    .card h2 {
+      margin: 0;
+      font-size: 1rem;
+      font-weight: 600;
+      letter-spacing: -0.02em;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    .card p {
+      margin: 0;
+      color: var(--muted);
+      font-size: 0.82rem;
+      line-height: 1.4;
+      display: -webkit-box;
+      -webkit-line-clamp: 2;
+      line-clamp: 2;
+      -webkit-box-orient: vertical;
+      overflow: hidden;
+    }
+    .origin {
+      position: absolute;
+      top: 0.75rem;
+      right: 0.75rem;
+      z-index: 1;
+      padding: 0.22rem 0.55rem;
+      border: 1px solid var(--line);
+      border-radius: 999px;
+      color: var(--muted);
+      text-decoration: none;
+      font-size: 0.72rem;
+      letter-spacing: 0.04em;
+      background: rgba(8, 11, 20, 0.45);
+    }
+    .origin:hover,
+    .origin:focus-visible {
+      color: var(--ink);
+      border-color: var(--accent);
+    }
+    .origin:focus-visible {
+      outline: 2px solid var(--accent);
+      outline-offset: 2px;
+    }
+    .empty {
+      grid-column: 1 / -1;
+      margin: 0;
+      padding: 2rem 1rem;
+      text-align: center;
+      color: var(--muted);
+      border: 1px dashed var(--line);
+      border-radius: var(--radius);
+    }
+    footer {
+      margin-top: 1.75rem;
+      color: var(--faint);
+      font-size: 0.8rem;
+    }
+    footer a { color: var(--accent); text-decoration: none; }
+    footer a:hover { text-decoration: underline; }
+    code {
+      font-family: var(--mono);
+      font-size: 0.86em;
+    }
+    @media (max-width: 560px) {
+      .wrap { width: min(100% - 1.5rem, 960px); padding-top: 1.6rem; }
+      .tools { align-items: stretch; }
+      #filter { width: 100%; }
+      .card-body { padding-right: 4.4rem; }
+    }
   </style>
 </head>
 <body>
-  <main>
-    <header class="hero">
-      <h1>书签演示实验室</h1>
-      <p>Cloudflare Pages 预览基座已上线。</p>
-      <p>推送分支即可获得预览地址。</p>
-      <p>固定单体仓库：每个选题以 <code>/apps/&lt;slug&gt;/</code> 独立上线。</p>
+  <div class="wrap">
+    <header class="top">
+      <div class="brand">
+        <p class="kicker">静态预览基座</p>
+        <h1>书签演示实验室</h1>
+        <p class="lede">从 X 书签长出来的静态演示。点卡片进应用，点「原帖」回书签。</p>
+      </div>
+      <div class="tools">
+        <label for="filter">筛选演示</label>
+        <input id="filter" type="search" placeholder="筛选 slug、标题、作者…" autocomplete="off" />
+        <p class="status" id="status" aria-live="polite">正在载入演示…</p>
+      </div>
     </header>
-    <section class="grid" aria-label="演示列表">
-      <!-- 卡片按倒序（最新在上）。新增演示请插到本列表最上方。 -->
-      <a class="card" href="apps/gsap-canvas/">
-        <span class="tag">apps/gsap-canvas</span>
-        <h2>审美三件套</h2>
-        <p>GSAP 编排 + Canvas 流体玻璃 / 粒子揭幕。向 Product Design × GSAP × Canvas UI 书签致敬的静态视觉舞台。</p>
-      </a>
-      <a class="card" href="apps/clapper/">
-        <span class="tag">apps/clapper</span>
-        <h2>Clapper</h2>
-        <p>用 React 写片子、渲成 MP4、像片场一样审片——致敬 Clapper 开场页的静态中文介绍。</p>
-      </a>
-      <a class="card" href="apps/llm-arch-3d/">
-        <span class="tag">apps/llm-arch-3d</span>
-        <h2>大模型架构 · 立体小卡</h2>
-        <p>把解码器图纸立起来：注意力、归一化与混合专家做成可旋转的 3D 迷你卡。</p>
-      </a>
-      <a class="card" href="apps/remotion-tear/">
-        <span class="tag">apps/remotion-tear</span>
-        <h2>撕纸最小片</h2>
-        <p>致敬 Codex + Remotion 的怀旧撕纸短片：报纸底、撕裂转场、六步剪辑思路。静态网页原作致敬。</p>
-      </a>
-      <a class="card" href="apps/obsidian-ui/">
-        <span class="tag">apps/obsidian-ui</span>
-        <h2>Obsidian UI 组件库</h2>
-        <p>独立落地页与组件演练场，灵感来自 ObsidianUI 的 React / Tailwind 组件库书签。少把时间耗在反复调界面，把精力留给真正能上线的东西。</p>
-      </a>
+
+    <p class="banner" id="banner" hidden></p>
+
+    <!-- 静态后备：无脚本或无法读取 tracking 时仍可浏览。成功读取 JSON 后由脚本替换。 -->
+    <section class="grid" id="grid" aria-label="演示列表">
+      <article class="card" data-search="gsap-canvas 审美三件套 product design gsap canvas ui BTCqzy1">
+        <a class="card-body" href="apps/gsap-canvas/">
+          <span class="slug">gsap-canvas</span>
+          <h2>审美三件套</h2>
+          <p>GSAP 编排 + Canvas 流体玻璃 / 粒子揭幕。</p>
+        </a>
+        <a class="origin" href="https://x.com/BTCqzy1/status/2099440427841597573" target="_blank" rel="noopener noreferrer">原帖</a>
+      </article>
+      <article class="card" data-search="remotion-tear 撕纸 Codex Remotion xl_lottie">
+        <a class="card-body" href="apps/remotion-tear/">
+          <span class="slug">remotion-tear</span>
+          <h2>撕纸最小片</h2>
+          <p>报纸底、撕裂转场、六步剪辑思路。</p>
+        </a>
+        <a class="origin" href="https://x.com/xl_lottie/status/2099342984433324435" target="_blank" rel="noopener noreferrer">原帖</a>
+      </article>
+      <article class="card" data-search="llm-arch-3d 大模型架构 立体小卡 bbruceyuan">
+        <a class="card-body" href="apps/llm-arch-3d/">
+          <span class="slug">llm-arch-3d</span>
+          <h2>大模型架构 · 立体小卡</h2>
+          <p>注意力、归一化与混合专家，做成可旋转的 3D 迷你卡。</p>
+        </a>
+        <a class="origin" href="https://x.com/bbruceyuan/status/2098785251455877338" target="_blank" rel="noopener noreferrer">原帖</a>
+      </article>
+      <article class="card" data-search="clapper 开场页 react mp4 kunchenguid">
+        <a class="card-body" href="apps/clapper/">
+          <span class="slug">clapper</span>
+          <h2>Clapper</h2>
+          <p>用 React 写片子、渲成 MP4，像片场一样审片。</p>
+        </a>
+        <a class="origin" href="https://x.com/kunchenguid/status/2099627078660624419" target="_blank" rel="noopener noreferrer">原帖</a>
+      </article>
+      <article class="card" data-search="obsidian-ui 组件库 React Tailwind dhruvtwt_">
+        <a class="card-body" href="apps/obsidian-ui/">
+          <span class="slug">obsidian-ui</span>
+          <h2>Obsidian UI 组件库</h2>
+          <p>少把时间耗在反复调界面，把精力留给真正能上线的东西。</p>
+        </a>
+        <a class="origin" href="https://x.com/dhruvtwt_/status/2099548790470640118" target="_blank" rel="noopener noreferrer">原帖</a>
+      </article>
     </section>
+
     <footer>
-      追踪记录见 <code>tracking/seen-bookmarks.json</code>。
-      来源书签：
-      <a href="https://x.com/BTCqzy1/status/2099440427841597573">x.com/BTCqzy1</a>
-      ·
-      <a href="https://x.com/kunchenguid/status/2099627078660624419">x.com/kunchenguid</a>
-      ·
-      <a href="https://x.com/bbruceyuan/status/2098785251455877338">x.com/bbruceyuan</a>
-      ·
-      <a href="https://x.com/xl_lottie/status/2099342984433324435">x.com/xl_lottie</a>
-      ·
-      <a href="https://x.com/dhruvtwt_/status/2099548790470640118">x.com/dhruvtwt_</a>
+      卡片来自 <code>tracking/seen-bookmarks.json</code>，按处理时间倒序。
+      固定路径 <code>/apps/&lt;slug&gt;/</code>。
     </footer>
-  </main>
+  </div>
+  <script>
+    (function () {
+      const TRACKING = new URL("./tracking/seen-bookmarks.json", window.location.href);
+      const grid = document.getElementById("grid");
+      const status = document.getElementById("status");
+      const banner = document.getElementById("banner");
+      const filter = document.getElementById("filter");
+      let catalog = null;
+
+      function normalize(s) {
+        return String(s || "").toLowerCase().trim();
+      }
+
+      function safeHttpUrl(value) {
+        try {
+          const url = new URL(value);
+          if (url.protocol === "https:" || url.protocol === "http:") return url.href;
+        } catch (_) {}
+        return "";
+      }
+
+      function demoHref(item) {
+        const raw = item && (item.path || (item.slug ? "/apps/" + item.slug + "/" : ""));
+        if (!raw) return "#";
+        return String(raw).replace(/^\//, "");
+      }
+
+      function shortTitle(item) {
+        if (item && item.hubTitle) return String(item.hubTitle);
+        const raw = (item && (item.titleZh || item.title || item.slug)) || "未命名演示";
+        const cut = String(raw).split(/[：:]/)[0].trim();
+        return cut || raw;
+      }
+
+      function haystack(item) {
+        return [
+          item.slug,
+          item.titleZh,
+          item.title,
+          item.blurbZh,
+          item.author,
+          item.id
+        ].map(normalize).join(" ");
+      }
+
+      function newestFirst(items) {
+        return items
+          .map(function (item, index) { return { item: item, index: index }; })
+          .sort(function (a, b) {
+            const ta = Date.parse(a.item && a.item.processedAt) || 0;
+            const tb = Date.parse(b.item && b.item.processedAt) || 0;
+            if (tb !== ta) return tb - ta;
+            return a.index - b.index;
+          })
+          .map(function (row) { return row.item; });
+      }
+
+      function cardEl(item) {
+        const article = document.createElement("article");
+        article.className = "card";
+        article.dataset.search = haystack(item);
+
+        const body = document.createElement("a");
+        body.className = "card-body";
+        body.href = demoHref(item);
+
+        const slug = document.createElement("span");
+        slug.className = "slug";
+        slug.textContent = item.slug || "—";
+
+        const h2 = document.createElement("h2");
+        h2.textContent = shortTitle(item);
+
+        body.append(slug, h2);
+        if (item.blurbZh) {
+          const p = document.createElement("p");
+          p.textContent = item.blurbZh;
+          body.append(p);
+        }
+
+        article.append(body);
+
+        const originUrl = safeHttpUrl(item.url);
+        if (originUrl) {
+          const origin = document.createElement("a");
+          origin.className = "origin";
+          origin.href = originUrl;
+          origin.target = "_blank";
+          origin.rel = "noopener noreferrer";
+          origin.textContent = "原帖";
+          origin.setAttribute("aria-label", "打开「" + shortTitle(item) + "」的原帖");
+          article.append(origin);
+        }
+
+        return article;
+      }
+
+      function visibleFallbackCards() {
+        return Array.prototype.slice.call(grid.querySelectorAll(".card"));
+      }
+
+      function applyFilter() {
+        const q = normalize(filter.value);
+        if (catalog) {
+          const shown = q ? catalog.filter(function (item) {
+            return haystack(item).indexOf(q) !== -1;
+          }) : catalog;
+          grid.replaceChildren();
+          if (!shown.length) {
+            const empty = document.createElement("p");
+            empty.className = "empty";
+            empty.textContent = catalog.length ? "没有匹配的演示" : "暂无演示";
+            grid.append(empty);
+          } else {
+            shown.forEach(function (item) { grid.append(cardEl(item)); });
+          }
+          status.textContent = !catalog.length
+            ? "暂无演示"
+            : q
+              ? shown.length + " / " + catalog.length + " 个演示"
+              : catalog.length + " 个演示";
+          return;
+        }
+        const cards = visibleFallbackCards();
+        let n = 0;
+        cards.forEach(function (card) {
+          const hit = !q || (card.dataset.search || "").indexOf(q) !== -1;
+          card.hidden = !hit;
+          if (hit) n += 1;
+        });
+        status.textContent = q ? n + " / " + cards.length + " 个演示" : cards.length + " 个演示";
+      }
+
+      filter.addEventListener("input", applyFilter);
+
+      fetch(TRACKING.href, { cache: "no-store" })
+        .then(function (res) {
+          if (!res.ok) throw new Error("HTTP " + res.status);
+          return res.json();
+        })
+        .then(function (data) {
+          const items = Array.isArray(data && data.items) ? data.items : [];
+          catalog = newestFirst(items.filter(function (item) {
+            return item && (item.slug || item.path);
+          }));
+          banner.hidden = true;
+          applyFilter();
+        })
+        .catch(function () {
+          const fileProto = window.location.protocol === "file:";
+          banner.hidden = false;
+          banner.textContent = fileProto
+            ? "无法读取追踪记录。请用本地静态服务打开本页，例如 python3 -m http.server 4173"
+            : "无法读取 tracking/seen-bookmarks.json，已显示页面内后备列表。";
+          applyFilter();
+        });
+    })();
+  </script>
 </body>
 </html>
