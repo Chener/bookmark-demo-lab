@@ -589,6 +589,11 @@ main {
     animation: none;
     opacity: 1;
     stroke-dashoffset: 0;
+  }
+  .layer.is-on .steps li {
+    transform: translate(-50%, -50%);
+  }
+  .layer.is-on .strips li {
     transform: none;
   }
 }

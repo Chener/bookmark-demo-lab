@@ -240,6 +240,19 @@
   });
   window.addEventListener("keydown", (event) => {
     if (event.code === "Space") {
+      const active = event.target;
+      if (active instanceof HTMLElement) {
+        const tag = active.tagName;
+        if (
+          tag === "BUTTON" ||
+          tag === "INPUT" ||
+          tag === "TEXTAREA" ||
+          tag === "SELECT" ||
+          active.isContentEditable
+        ) {
+          return;
+        }
+      }
       event.preventDefault();
       setPlaying(!playing);
     } else if (event.key === "ArrowRight") {
