@@ -574,6 +574,7 @@ body.dark .theme-toggle .moon { display: block; }
   padding: 0.7rem 0.75rem;
   border-radius: 10px;
   font: inherit;
+  color: inherit;
   cursor: pointer;
 }
 
