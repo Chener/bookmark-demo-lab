@@ -1,0 +1,312 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta name="theme-color" content="#0c0b09" />
+  <title>Clapper — 用 React 写片子</title>
+  <meta name="description" content="Clapper 静态致敬页：用 React 写片子，渲成 MP4，像片场一样审片。每一帧都是帧号的纯函数。" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@400;500;700;900&family=Noto+Serif+SC:wght@600;700&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <a class="skip" href="#frame">跳到演示</a>
+
+  <header class="hero">
+    <div class="shell hero-grid">
+      <div class="hero-copy">
+        <a class="back" href="/">← 返回实验室</a>
+        <div class="slate-mascot" aria-hidden="true">
+          <div class="stick"></div>
+          <div class="body">
+            <i></i><i></i><i></i>
+            <span class="eyes"></span>
+            <span id="board-frame">f 0000</span>
+          </div>
+        </div>
+        <p class="eyebrow gold">开源 · MIT · Calvin @ ArchAstro · 静态致敬</p>
+        <h1>Clapper</h1>
+        <p class="lede">用 React 写片子。渲成 MP4。像片场一样过审。每一帧都是帧号的纯函数，配乐是代码，审片的是带着联系表的智能体。</p>
+        <div class="install">
+          <code>npx skills add <b>ArchAstro/clapper</b> --skill clapper --global</code>
+          <button class="btn quiet" type="button" data-copy="npx skills add ArchAstro/clapper --skill clapper --global">复制</button>
+        </div>
+        <div class="actions">
+          <a class="btn primary" href="https://github.com/ArchAstro/clapper">打开仓库</a>
+          <a class="btn quiet" href="#frame">拖一帧试试</a>
+          <a class="btn quiet" href="https://x.com/kunchenguid/status/2099627078660624419">来源收藏</a>
+        </div>
+      </div>
+
+      <figure class="title-card">
+        <div class="stage-frame" id="hero-stage">
+          <svg viewBox="0 0 640 360" role="img" aria-labelledby="hero-title">
+            <title id="hero-title">由帧号驱动的开场片舞台</title>
+            <defs>
+              <linearGradient id="warm" x1="0" y1="0" x2="1" y2="1">
+                <stop offset="0" stop-color="#f1c95a" />
+                <stop offset="1" stop-color="#c45c4a" />
+              </linearGradient>
+              <radialGradient id="spot" cx="50%" cy="20%" r="70%">
+                <stop offset="0" stop-color="#3a3428" />
+                <stop offset="1" stop-color="#0c0b09" />
+              </radialGradient>
+            </defs>
+            <rect width="640" height="360" fill="url(#spot)" />
+            <text x="36" y="48" fill="#d4a84b" font-size="12" font-family="ui-monospace, Menlo, monospace" letter-spacing="3">开场 · 纯函数 · 无原片素材</text>
+            <text id="hero-line" x="36" y="108" fill="#f6f1e6" font-size="42" font-weight="800" font-family="Noto Serif SC, serif"></text>
+            <text id="hero-sub" x="36" y="142" fill="#a79f90" font-size="14" font-family="ui-monospace, Menlo, monospace"></text>
+            <line x1="40" y1="308" x2="600" y2="308" stroke="#3a3730" stroke-width="2" />
+            <ellipse id="hero-shadow" cx="160" cy="308" rx="42" ry="8" fill="#000" opacity=".45" />
+            <g id="hero-actor">
+              <rect id="hero-box" x="130" y="210" width="64" height="64" rx="14" fill="url(#warm)" />
+              <rect id="hero-lid" x="128" y="198" width="68" height="16" rx="4" fill="#f6f1e6" />
+              <circle id="hero-eye-l" cx="150" cy="236" r="4.5" fill="#141311" />
+              <circle id="hero-eye-r" cx="174" cy="236" r="4.5" fill="#141311" />
+            </g>
+          </svg>
+          <div class="hud" id="hero-hud">第 000 帧 · 0.00 秒</div>
+          <button class="play" type="button" id="toggle-play" aria-pressed="true">暂停</button>
+        </div>
+        <figcaption>
+          <span>开场片 · 6 秒循环 · 30fps · 原谱概念</span>
+          <span>画面由帧号算出，不是时钟</span>
+        </figcaption>
+      </figure>
+    </div>
+  </header>
+
+  <main>
+    <section class="block" id="frame">
+      <div class="shell">
+        <p class="eyebrow">核心一念</p>
+        <h2>每一帧，只是帧号的函数</h2>
+        <p class="intro">没有墙上的钟。场景读 <code>useFrame()</code>，自己画出自己。所以渲染器可以直接去第 212 帧，而不必先播完 0 到 211；预览可以前后随便拖；同一份源码渲两次，字节都一样。拖下面的滑杆——画面只由这个数字算出来。</p>
+
+        <div class="demo">
+          <div>
+            <div class="viewport">
+              <div class="hud" id="hud">第 000 帧 · 0.00 秒</div>
+              <svg viewBox="0 0 640 360" aria-label="位置由帧号算出的角色">
+                <defs>
+                  <linearGradient id="blob" x1="0" y1="0" x2="1" y2="1">
+                    <stop offset="0" stop-color="#f1c95a" />
+                    <stop offset="1" stop-color="#e08aa0" />
+                  </linearGradient>
+                </defs>
+                <rect width="640" height="360" fill="#141311" />
+                <line x1="40" y1="300" x2="600" y2="300" stroke="#3a3730" stroke-width="2" />
+                <ellipse id="shadow" cx="160" cy="300" rx="40" ry="8" fill="#000" opacity=".5" />
+                <rect id="box" x="130" y="220" width="60" height="60" rx="12" fill="url(#blob)" />
+                <circle id="eye1" cx="150" cy="242" r="4" fill="#141311" />
+                <circle id="eye2" cx="170" cy="242" r="4" fill="#141311" />
+                <text id="cap" x="40" y="70" fill="#f3efe4" font-family="Noto Serif SC, serif" font-weight="700" font-size="32"></text>
+                <text id="sub" x="40" y="102" fill="#a7a291" font-family="ui-monospace, Menlo, monospace" font-size="14"></text>
+              </svg>
+            </div>
+            <div class="scrub">
+              <span>0</span>
+              <input id="scrub" type="range" min="0" max="179" value="0" aria-label="帧号" />
+              <span>179</span>
+            </div>
+            <p class="note">试试往后拖。靠墙上时钟走的时间轴做不到；帧号的纯函数可以。</p>
+          </div>
+          <pre><code><span class="c">// 一场戏，按帧号来写</span>
+<span class="k">function</span> Bounce() {
+  <span class="k">const</span> f = useFrame();
+  <span class="k">const</span> t = f / <span class="n">179</span>;
+  <span class="k">const</span> x = lerp(<span class="n">70</span>, <span class="n">500</span>, ease(t));
+  <span class="k">const</span> hop = Math.abs(Math.sin(t * Math.PI * <span class="n">4</span>)) * <span class="n">110</span>;
+  <span class="k">const</span> squash = (f % <span class="n">32</span>) &lt; <span class="n">3</span> ? <span class="n">0.8</span> : <span class="n">1</span>;
+  <span class="k">return</span> &lt;Dot x={x} y={<span class="n">250</span> - hop} scaleY={squash} /&gt;;
+}
+
+<span class="c">// 时间写在场次表里，不写在组件里</span>
+<span class="k">const</span> SCENES = defineScenes({
+  hook:  { seconds: <span class="n">2</span> },
+  proof: { seconds: <span class="n">4</span>, fade: <span class="n">8</span> },
+});</code></pre>
+        </div>
+      </div>
+    </section>
+
+    <section class="block" id="pipeline">
+      <div class="shell">
+        <p class="eyebrow">怎么渲出来</p>
+        <h2>进去的是 React，出来的是 MP4</h2>
+        <p class="intro">命令行用 Vite 打包，在无头 Chromium 里打开，把帧号设进去，截一张 JPEG，再把帧流推进 ffmpeg。声音也是 React 元素：它们登记提示点，离线合成器做成立体声，最后再叠进片子。</p>
+        <ol class="pipe">
+          <li><b>src/index.tsx</b><span>登记根组件、一场 Composition、场次表、一份总谱</span></li>
+          <li><b>vite build</b><span>和片场预览打开的是同一份包</span></li>
+          <li><b>逐帧截图</b><span>setFrame(n)，JPEG q96</span></li>
+          <li><b>ffmpeg</b><span>libx264 画面，提示点离线混成一条音轨</span></li>
+          <li class="out"><b>out/spot.mp4</b><span>h264 + aac，每次字节都一样</span></li>
+        </ol>
+        <div class="cards">
+          <article>
+            <h3>clapper preview</h3>
+            <p>片场：实时缩略图、安全框、按音色分轨的时间轴、提示点预听，还有一块在浏览器里编译 TSX 的草稿台。</p>
+          </article>
+          <article>
+            <h3>clapper still</h3>
+            <p>一场戏的首、中、末帧，或每隔十帧抽一张。还没花渲染的钱，先看这一拍落不落得住。</p>
+          </article>
+          <article>
+            <h3>clapper review</h3>
+            <p>联系表、每个剪辑点附近的九宫运动条、频谱、波形、检查报告，再加一份审片提示。交给人，或交给子智能体。</p>
+          </article>
+        </div>
+      </div>
+    </section>
+
+    <section class="block" id="music">
+      <div class="shell">
+        <p class="eyebrow">配乐即代码</p>
+        <h2>总谱是一份 TypeScript</h2>
+        <p class="intro">总谱里有速度表、拍号、分轨和片段。每条轨点一份 CC0 采样乐器，本地采样器渲成分轨，再压到广播响度。片场把钢琴卷帘放在画面旁边：点一个音，片子就跳到那儿。</p>
+        <div class="music">
+          <pre><code><span class="c">// 致敬页自己的小调，不是仓库里的那首华尔兹</span>
+<span class="k">export default</span> defineScore({
+  title: <span class="s">"灯还亮着"</span>,
+  tempo: [{ at: <span class="n">0</span>, bpm: <span class="n">96</span> }, { at: <span class="n">8</span>, bpm: <span class="n">88</span> }],
+  meter: [<span class="n">4</span>, <span class="n">4</span>], seed: <span class="n">11</span>, tail: <span class="n">2</span>,
+  tracks: [
+    track(<span class="s">"keys"</span>, {
+      instrument: <span class="s">"upright"</span>, gain: <span class="n">0.58</span>,
+      clips: [{ notes: phrase(<span class="s">"C5 D5 E5 G5 A5 G5 E5 D5"</span>, { beats: <span class="n">0.5</span> }) }],
+    }),
+    track(<span class="s">"pluck"</span>, {
+      instrument: <span class="s">"pizz"</span>, pan: <span class="n">0.2</span>,
+      clips: [{ at: <span class="n">2</span>, notes: chord([<span class="s">"C4"</span>, <span class="s">"E4"</span>, <span class="s">"G4"</span>]) }],
+    }),
+  ],
+});</code></pre>
+          <div>
+            <div class="roll">
+              <svg id="roll" viewBox="0 0 520 220" aria-label="钢琴卷帘：灯还亮着"></svg>
+              <div class="roll-cap">
+                <span>keys · 第 1–2 小节</span>
+                <span>4/4 · 96 bpm · C 宫</span>
+              </div>
+            </div>
+            <div class="facts">
+              <div><b>78</b><span>份编目过的 CC0 预设：弦、管、铜、键、打击，外加三套摇滚</span></div>
+              <div><b>960</b><span>每四分音符的脉冲；乐时和视频帧各走各的</span></div>
+              <div><b>−18</b><span>LUFS 母带；分轨、MIDI 导入导出都在</span></div>
+              <div><b>0</b><span>条垫底音轨；片子里每个音都写在总谱文件里</span></div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section class="block" id="sheet">
+      <div class="shell">
+        <p class="eyebrow">审片联系表</p>
+        <h2>同一函数，抽出六张静帧</h2>
+        <p class="intro">真正的 Clapper 会把联系表交给独立审片人。这里用同一套 <code>draw(f)</code> 抽出六张静帧——点一张就跳到那一帧。没有官方成片，也不搬运原仓库素材。</p>
+        <div class="sheet" id="sheet" aria-label="联系表"></div>
+      </div>
+    </section>
+
+    <section class="block" id="spots">
+      <div class="shell">
+        <p class="eyebrow">片子用来干什么</p>
+        <h2>产品片、学习片、给自己看的片</h2>
+        <p class="intro">原帖里 Calvin 说：让编程智能体装上这个 skill，它会写 React 来生成视频，也能作曲、也能旁白。下面四张是致敬页自己的示意海报，用来讲用途，不是仓库里那七部成片。</p>
+        <div class="posters">
+          <article>
+            <div class="poster poster-a" aria-hidden="true"><span>01</span></div>
+            <div class="meta">产品说明</div>
+            <h3>刚做好的工具，先拍一条</h3>
+            <p>把刚上线的页面、CLI、内部平台讲清楚。画面是代码，配乐也是代码，版本和哈希可以对上。</p>
+          </article>
+          <article>
+            <div class="poster poster-b" aria-hidden="true"><span>02</span></div>
+            <div class="meta">论文 / 笔记</div>
+            <h3>把一篇机器学习论文做成片子</h3>
+            <p>给自己看的那种。公式、图、一条旁白轨。智能体写场景，你负责说「这一镜再慢半拍」。</p>
+          </article>
+          <article>
+            <div class="poster poster-c" aria-hidden="true"><span>03</span></div>
+            <div class="meta">片场预览</div>
+            <h3>拖时间轴，而不是干等渲染</h3>
+            <p>因为画面是帧号的函数，预览可以来回搓。拍板落下的那一下，和谱面上的音头对齐。</p>
+          </article>
+          <article>
+            <div class="poster poster-d" aria-hidden="true"><span>04</span></div>
+            <div class="meta">智能体过审</div>
+            <h3>渲完不等于过了</h3>
+            <p>空白尾、切在空帧上、文案出安全框——检查器自己能抓一批；听感则交给谱面、采样和信号，不装懂。</p>
+          </article>
+        </div>
+      </div>
+    </section>
+
+    <section class="block" id="review">
+      <div class="shell">
+        <p class="eyebrow">像片场那样过审</p>
+        <h2>渲完，还要过一轮</h2>
+        <p class="intro">成片不是终点。官方流程会把联系表交给按创意总监briefs的独立审片人，必要时再加音频指导和信息流策略。下面是致敬页归纳的过审逻辑，不是原站那张记分板的逐行复制。</p>
+        <div class="two">
+          <div>
+            <h3>检查器自己能抓到的</h3>
+            <ul>
+              <li>硬切后前八帧里出现空白或死画面</li>
+              <li>文案叠文案，或跑出安全框</li>
+              <li>源码里出现墙上时钟、定时器、未播种的随机数</li>
+              <li>每个剪辑点附近的响度，免得压音把效果声吞掉</li>
+            </ul>
+          </div>
+          <div>
+            <h3>它不会假装能做的</h3>
+            <ul>
+              <li>智能体听不见。音频审查看谱面、采样表和信号，每次都写明这一点。</li>
+              <li>结论要写清看过哪些帧、哪些时段，以及哪些没核。</li>
+              <li>通过的成片用哈希钉住。源码一改，就要新哈希、新一轮审。</li>
+            </ul>
+          </div>
+        </div>
+        <ol class="rules">
+          <li>屏幕上的一切都是 <code>useFrame()</code> 的函数。不要墙上时钟，不要定时器，不要 <code>Math.random</code>，用带种子的助手。</li>
+          <li>合成抛错，渲染就失败，错误要写清场次和局部帧。</li>
+          <li>每场硬切在局部第 0 帧就必须有东西：眉题、一条线、一个字幕框。</li>
+          <li>声音在序列挂载时登记，渲染器会走遍每一帧，提示点不会漏。</li>
+        </ol>
+      </div>
+    </section>
+  </main>
+
+  <section class="close">
+    <div class="shell">
+      <p class="eyebrow gold">去试</p>
+      <h2>你的智能体，就是整组摄制组</h2>
+      <p class="lede">给编程智能体装上这个 skill。它会装好 Clapper，备好 Node、Chromium 和 ffmpeg，建项目，再带你走视觉和音频审查。不用另开一套环境。</p>
+      <div class="install">
+        <code>npx skills add <b>ArchAstro/clapper</b> --skill clapper --global</code>
+        <button class="btn quiet" type="button" data-copy="npx skills add ArchAstro/clapper --skill clapper --global">复制</button>
+      </div>
+      <blockquote>然后新开一轮：「用 Clapper skill 做一条带原创配乐的视频。需要的都帮我装好。」</blockquote>
+      <div class="actions">
+        <a class="btn primary" href="https://github.com/ArchAstro/clapper">github.com/ArchAstro/clapper</a>
+        <a class="btn quiet" href="https://clapper.archastro.tryintern.dev/">原介绍页</a>
+      </div>
+    </div>
+  </section>
+
+  <footer>
+    <div class="shell">
+      <p>这是 bookmark-demo-lab 的静态中文致敬页，不是官方站点，也不使用原仓库的成片或海报。</p>
+      <p>
+        来源：
+        <a href="https://x.com/kunchenguid/status/2099627078660624419">Kun Chen 的收藏帖</a>
+        · 原作 Calvin Grunewald / ArchAstro · MIT
+      </p>
+    </div>
+  </footer>
+
+  <script src="app.js"></script>
+</body>
+</html>
