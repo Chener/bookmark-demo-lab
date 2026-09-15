@@ -1,6 +1,6 @@
 (() => {
   const reduced = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
-  const hasGsap = typeof window.gsap === "function";
+  const hasGsap = typeof window.gsap?.to === "function";
 
   const pinSteps = [
     {
