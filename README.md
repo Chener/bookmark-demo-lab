@@ -8,8 +8,8 @@
 
 ```
 apps/<slug>/                 # 每个选题一个自包含演示
-tracking/seen-bookmarks.json # 已做成应用的 id / url
-index.html                   # 枢纽，链到 /apps/<slug>/
+tracking/seen-bookmarks.json # 已做成应用的 id / url；枢纽运行时读取
+index.html                   # 枢纽：卡片网格 + 原帖链接
 ```
 
 静态优先，交给 Cloudflare Pages（Framework preset: None，构建命令留空，输出目录 `/`）。不要加 Workers、`wrangler.toml`、自定义域名或 CNAME，也不要另开 Cloudflare 项目。
@@ -18,7 +18,9 @@ index.html                   # 枢纽，链到 /apps/<slug>/
 
 - **枢纽页与各应用的用户可见文案一律中文**（导航、标题、按钮、占位符、aria-label、页脚等）。
 - URL、slug、HTML `id`、`data-*`、文件路径保持英文，以便预览路径稳定。
-- 枢纽卡片按**倒序**（最新在上）。新演示插到 `index.html` 卡片列表最上方。
+- 枢纽卡片按 **`processedAt` 倒序**（最新在上）。根页运行时读取 `tracking/seen-bookmarks.json` 渲染；新增演示追加 tracking 即可，不必再改枢纽卡片或页脚链接。
+- 每张卡片带「原帖」次要按钮，指向该条的 `url`（X 书签），主点击仍进入 `/apps/<slug>/`。
+- 可选字段：`hubTitle`（枢纽短标题）、`blurbZh`（一行简介）。缺省时用 `titleZh`。
 - 不要为预览绑定自定义域名。
 
 ## 当前演示
@@ -50,7 +52,7 @@ index.html                   # 枢纽，链到 /apps/<slug>/
 ## Agent 工作流
 
 1. Cloud Agent 切分支（始终同一仓库，不要一演示一仓库）
-2. 新增 `apps/<slug>/`，更新枢纽（新卡片置顶），追加 `tracking/seen-bookmarks.json`
+2. 新增 `apps/<slug>/`，追加 `tracking/seen-bookmarks.json`（`url`、`slug`、`titleZh`、`processedAt`，建议带 `hubTitle` / `blurbZh`）。枢纽会按时间倒序自动列出，并带上「原帖」链接。
 3. 把静态文件（或构建产物）推到 `apps/<slug>/`
 4. Firstmate 读取 Pages 预览地址并通知 captain
 

@@ -7,6 +7,8 @@
       "slug": "gsap-canvas",
       "title": "Product Design + GSAP + Canvas UI 审美三件套",
       "titleZh": "审美三件套：Product Design × GSAP × Canvas UI",
+      "hubTitle": "审美三件套",
+      "blurbZh": "GSAP 编排 + Canvas 流体玻璃 / 粒子揭幕。",
       "author": "BTCqzy1",
       "processedAt": "2026-09-15T02:56:00.000Z",
       "path": "/apps/gsap-canvas/"
@@ -17,6 +19,8 @@
       "slug": "clapper",
       "title": "Clapper intro: write videos in React, render to MP4",
       "titleZh": "Clapper 开场页：用 React 写片子，渲成 MP4",
+      "hubTitle": "Clapper",
+      "blurbZh": "用 React 写片子、渲成 MP4，像片场一样审片。",
       "author": "kunchenguid",
       "processedAt": "2026-09-15T01:55:00.000Z",
       "path": "/apps/clapper/"
@@ -27,6 +31,8 @@
       "slug": "llm-arch-3d",
       "title": "大模型架构立体小卡",
       "titleZh": "大模型架构立体小卡",
+      "hubTitle": "大模型架构 · 立体小卡",
+      "blurbZh": "注意力、归一化与混合专家，做成可旋转的 3D 迷你卡。",
       "author": "bbruceyuan",
       "processedAt": "2026-09-15T01:56:00.000Z",
       "path": "/apps/llm-arch-3d/"
@@ -37,6 +43,8 @@
       "slug": "remotion-tear",
       "title": "Codex+Remotion 怀旧撕纸短片",
       "titleZh": "Codex+Remotion 怀旧撕纸短片",
+      "hubTitle": "撕纸最小片",
+      "blurbZh": "报纸底、撕裂转场、六步剪辑思路。",
       "author": "xl_lottie",
       "processedAt": "2026-09-15T02:00:00.000Z",
       "path": "/apps/remotion-tear/"
@@ -47,6 +55,8 @@
       "slug": "obsidian-ui",
       "title": "ObsidianUI React/Tailwind component library",
       "titleZh": "ObsidianUI React/Tailwind 组件库",
+      "hubTitle": "Obsidian UI 组件库",
+      "blurbZh": "少把时间耗在反复调界面，把精力留给真正能上线的东西。",
       "author": "dhruvtwt_",
       "processedAt": "2026-09-15T00:32:00.000Z",
       "path": "/apps/obsidian-ui/"
