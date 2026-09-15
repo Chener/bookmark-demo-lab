@@ -11,7 +11,10 @@
       "blurbZh": "GSAP 编排 + Canvas 流体玻璃 / 粒子揭幕。",
       "author": "BTCqzy1",
       "processedAt": "2026-09-15T02:56:00.000Z",
-      "path": "/apps/gsap-canvas/"
+      "path": "/apps/gsap-canvas/",
+      "subscriptionZh": "Cursor Ultra",
+      "modelZh": "grok-4.6",
+      "harnessZh": "Cursor Cloud Agent"
     },
     {
       "id": "2099627078660624419",
@@ -23,7 +26,10 @@
       "blurbZh": "用 React 写片子、渲成 MP4，像片场一样审片。",
       "author": "kunchenguid",
       "processedAt": "2026-09-15T01:55:00.000Z",
-      "path": "/apps/clapper/"
+      "path": "/apps/clapper/",
+      "subscriptionZh": "Cursor Ultra",
+      "modelZh": "grok-4.6",
+      "harnessZh": "Cursor Cloud Agent"
     },
     {
       "id": "2098785251455877338",
@@ -35,7 +41,10 @@
       "blurbZh": "注意力、归一化与混合专家，做成可旋转的 3D 迷你卡。",
       "author": "bbruceyuan",
       "processedAt": "2026-09-15T01:56:00.000Z",
-      "path": "/apps/llm-arch-3d/"
+      "path": "/apps/llm-arch-3d/",
+      "subscriptionZh": "Cursor Ultra",
+      "modelZh": "grok-4.6",
+      "harnessZh": "Cursor Cloud Agent"
     },
     {
       "id": "2099342984433324435",
@@ -47,7 +56,10 @@
       "blurbZh": "报纸底、撕裂转场、六步剪辑思路。",
       "author": "xl_lottie",
       "processedAt": "2026-09-15T02:00:00.000Z",
-      "path": "/apps/remotion-tear/"
+      "path": "/apps/remotion-tear/",
+      "subscriptionZh": "Cursor Ultra",
+      "modelZh": "grok-4.6",
+      "harnessZh": "Cursor Cloud Agent"
     },
     {
       "id": "2099548790470640118",
@@ -59,7 +71,10 @@
       "blurbZh": "少把时间耗在反复调界面，把精力留给真正能上线的东西。",
       "author": "dhruvtwt_",
       "processedAt": "2026-09-15T00:32:00.000Z",
-      "path": "/apps/obsidian-ui/"
+      "path": "/apps/obsidian-ui/",
+      "subscriptionZh": "Cursor Ultra",
+      "modelZh": "grok-4.6",
+      "harnessZh": "Cursor Cloud Agent"
     }
   ]
 }
