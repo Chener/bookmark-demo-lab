@@ -186,9 +186,7 @@ h1 {
 }
 
 .card.is-hidden {
-  opacity: 0.12;
-  filter: grayscale(1);
-  pointer-events: none;
+  display: none;
 }
 
 .card:hover,
