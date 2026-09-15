@@ -110,8 +110,8 @@
   document.addEventListener("keydown", (event) => {
     if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === "k") {
       event.preventDefault();
-      if (overlay?.hidden) openSearch();
-      else closeSearch();
+      if (overlay?.classList.contains("is-open")) closeSearch();
+      else openSearch();
     }
     if (event.key === "Escape") closeSearch();
   });
