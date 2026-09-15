@@ -14,7 +14,8 @@
       "path": "/apps/gsap-canvas/",
       "subscriptionZh": "Cursor Ultra",
       "modelZh": "grok-4.6",
-      "harnessZh": "Cursor Cloud Agent"
+      "harnessZh": "Cursor Cloud Agent",
+      "environmentZh": "Cursor Cloud Agent 托管机"
     },
     {
       "id": "2099627078660624419",
@@ -29,7 +30,8 @@
       "path": "/apps/clapper/",
       "subscriptionZh": "Cursor Ultra",
       "modelZh": "grok-4.6",
-      "harnessZh": "Cursor Cloud Agent"
+      "harnessZh": "Cursor Cloud Agent",
+      "environmentZh": "Cursor Cloud Agent 托管机"
     },
     {
       "id": "2098785251455877338",
@@ -44,7 +46,8 @@
       "path": "/apps/llm-arch-3d/",
       "subscriptionZh": "Cursor Ultra",
       "modelZh": "grok-4.6",
-      "harnessZh": "Cursor Cloud Agent"
+      "harnessZh": "Cursor Cloud Agent",
+      "environmentZh": "Cursor Cloud Agent 托管机"
     },
     {
       "id": "2099342984433324435",
@@ -59,7 +62,8 @@
       "path": "/apps/remotion-tear/",
       "subscriptionZh": "Cursor Ultra",
       "modelZh": "grok-4.6",
-      "harnessZh": "Cursor Cloud Agent"
+      "harnessZh": "Cursor Cloud Agent",
+      "environmentZh": "Cursor Cloud Agent 托管机"
     },
     {
       "id": "2099548790470640118",
@@ -74,7 +78,8 @@
       "path": "/apps/obsidian-ui/",
       "subscriptionZh": "Cursor Ultra",
       "modelZh": "grok-4.6",
-      "harnessZh": "Cursor Cloud Agent"
+      "harnessZh": "Cursor Cloud Agent",
+      "environmentZh": "Cursor Cloud Agent 托管机"
     }
   ]
 }
