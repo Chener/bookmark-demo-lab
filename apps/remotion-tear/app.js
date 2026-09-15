@@ -238,28 +238,27 @@
     if (event.target.closest("a, button, input, label")) return;
     setPlaying(!playing);
   });
+  function focusedControl(event, selector) {
+    const el = event.target;
+    return el instanceof Element && Boolean(el.closest(selector));
+  }
+
   window.addEventListener("keydown", (event) => {
     if (event.code === "Space") {
-      const active = event.target;
-      if (active instanceof HTMLElement) {
-        const tag = active.tagName;
-        if (
-          tag === "BUTTON" ||
-          tag === "INPUT" ||
-          tag === "TEXTAREA" ||
-          tag === "SELECT" ||
-          active.isContentEditable
-        ) {
-          return;
-        }
+      if (
+        focusedControl(
+          event,
+          "a, button, input, textarea, select, [contenteditable]"
+        )
+      ) {
+        return;
       }
       event.preventDefault();
       setPlaying(!playing);
-    } else if (event.key === "ArrowRight") {
-      frame = Math.min(DURATION - 1, frame + 5);
-      applyFrame(frame);
-    } else if (event.key === "ArrowLeft") {
-      frame = Math.max(0, frame - 5);
+    } else if (event.key === "ArrowRight" || event.key === "ArrowLeft") {
+      if (focusedControl(event, "input, textarea, select, button")) return;
+      const delta = event.key === "ArrowRight" ? 5 : -5;
+      frame = Math.max(0, Math.min(DURATION - 1, frame + delta));
       applyFrame(frame);
     }
   });
