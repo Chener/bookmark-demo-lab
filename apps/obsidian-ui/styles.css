@@ -612,6 +612,8 @@ body.dark .hero-copy p,
 body.dark .tab-copy,
 body.dark .docs .steps { color: var(--muted); }
 body.dark .source a { color: var(--ink); }
+body.dark .search-pill kbd,
+body.dark .spot-bar kbd { color: var(--muted); border-color: var(--line); }
 
 @media (max-width: 820px) {
   .hero { grid-template-columns: 1fr; }
