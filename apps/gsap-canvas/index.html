@@ -1,0 +1,175 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>审美三件套 — bookmark-demo-lab</title>
+  <meta name="description" content="Product Design × GSAP × Canvas UI。静态致敬：编排节奏、流体玻璃、粒子揭幕。" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Instrument+Sans:wght@400;500;600;700&family=Noto+Sans+SC:wght@400;500;700&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <div class="studio" aria-hidden="true">
+    <div class="grid-wall"></div>
+    <div class="grid-floor"></div>
+    <div class="glow"></div>
+  </div>
+
+  <header class="nav">
+    <a class="brand" href="./">
+      <span class="mark" aria-hidden="true"></span>
+      审美三件套
+    </a>
+    <nav class="links">
+      <a href="#choreography">编排</a>
+      <a href="#liquid">流体</a>
+      <a href="#reveal">揭幕</a>
+    </nav>
+    <a class="hub" href="/">← 实验室</a>
+  </header>
+
+  <main>
+    <section class="hero">
+      <p class="kicker">
+        <span>Product Design</span>
+        <span>GSAP</span>
+        <span>Canvas UI</span>
+      </p>
+      <h1>
+        <span class="line" data-split>前端必装的</span>
+        <span class="line display" data-split>审美三件套</span>
+      </h1>
+      <p class="lede">
+        模型再强，页面仍可能一眼 AI。先把设计立住，用 GSAP 把节奏编好，再用 Canvas 把冲击力叠上去——流体、玻璃、粒子，还压在可点的界面上。
+      </p>
+      <div class="hero-actions">
+        <a class="btn primary" href="#choreography">进入三座舞台</a>
+        <a class="btn ghost" href="https://x.com/BTCqzy1/status/2099440427841597573" target="_blank" rel="noopener">源书签</a>
+      </div>
+
+      <div class="orbit-stage" aria-hidden="true">
+        <svg class="orbit-svg" viewBox="0 0 640 360" fill="none">
+          <defs>
+            <linearGradient id="orbit-stroke" x1="128" y1="80" x2="522" y2="260" gradientUnits="userSpaceOnUse">
+              <stop offset="0" stop-color="#22c55e" />
+              <stop offset="0.45" stop-color="#2563eb" />
+              <stop offset="1" stop-color="#2563eb" />
+            </linearGradient>
+          </defs>
+          <path id="orbit-path" d="M128 188 C128 86 512 72 522 176 C532 278 150 292 128 188 Z" />
+          <rect class="handle" x="118" y="178" width="18" height="18" rx="3" />
+          <rect class="handle" x="312" y="70" width="18" height="18" rx="3" />
+          <rect class="handle" x="512" y="166" width="18" height="18" rx="3" />
+        </svg>
+        <div class="chrome-cursor" data-cursor>
+          <svg viewBox="0 0 72 86" aria-hidden="true">
+            <defs>
+              <linearGradient id="metal" x1="0" y1="0" x2="1" y2="1">
+                <stop offset="0" stop-color="#ffffff" />
+                <stop offset="0.28" stop-color="#d7dee6" />
+                <stop offset="0.62" stop-color="#7b8694" />
+                <stop offset="1" stop-color="#f3f6fa" />
+              </linearGradient>
+            </defs>
+            <path d="M8 4 L10 70 L26 52 L40 82 L52 76 L36 48 L64 46 Z" fill="url(#metal)" stroke="#1e293b" stroke-width="1.4" stroke-linejoin="round" />
+          </svg>
+        </div>
+      </div>
+    </section>
+
+    <section class="pin-wrap" id="choreography">
+      <div class="pin-stage">
+        <p class="stage-label">舞台 01 · GSAP 编排</p>
+        <div class="pin-layout">
+          <div class="pin-copy">
+            <p class="idx" data-pin-idx>01</p>
+            <h2 data-pin-word>设计</h2>
+            <p class="pin-body" data-pin-copy>先把页面设计好。给它一个想法、一张截图或参考站，围绕需求探索方案，再做成可交互原型。</p>
+            <ol class="beats" data-beats>
+              <li class="is-on"><button type="button" data-beat="0">产品设计 · 先立视觉</button></li>
+              <li><button type="button" data-beat="1">GSAP · 再编节奏</button></li>
+              <li><button type="button" data-beat="2">Canvas · 最后叠冲击</button></li>
+            </ol>
+          </div>
+          <aside class="device" aria-hidden="true">
+            <div class="device-bar"><span></span><span></span><span></span></div>
+            <div class="device-screen" data-pin-screen>
+              <p class="device-kicker" data-pin-kicker>Product Design</p>
+              <p class="device-title" data-pin-title>探索方案</p>
+              <div class="device-bars">
+                <i></i><i></i><i></i>
+              </div>
+            </div>
+          </aside>
+        </div>
+        <div class="scrub" aria-hidden="true"><b data-scrub></b></div>
+      </div>
+    </section>
+
+    <section class="boards" id="canvas-boards">
+      <article class="board" id="liquid">
+        <header class="board-head">
+          <div>
+            <p class="stage-label">舞台 02 · Canvas 流体玻璃</p>
+            <h3>指针即镜头</h3>
+            <p>流体在底层游走，玻璃透镜跟着指针放大。特效叠在真实按钮上，仍可点击。</p>
+          </div>
+          <button type="button" class="btn tiny" data-palette>切换色盘</button>
+        </header>
+        <div class="device-frame" data-liquid-frame>
+          <canvas data-liquid></canvas>
+          <div class="live-ui">
+            <p>真实 HTML 控件</p>
+            <button type="button" class="btn tiny light" data-palette>切换色盘</button>
+          </div>
+        </div>
+      </article>
+
+      <article class="board" id="reveal">
+        <header class="board-head">
+          <div>
+            <p class="stage-label">舞台 03 · Canvas 粒子揭幕</p>
+            <h3>靠近就成形</h3>
+            <p>字是灰尘，指针靠近时颗粒归位。点「换词」在 设计 / 节奏 / 冲击 之间重组。</p>
+          </div>
+          <button type="button" class="btn tiny" data-next-word>换词</button>
+        </header>
+        <div class="device-frame light" data-reveal-frame>
+          <canvas data-reveal></canvas>
+          <div class="live-ui dark">
+            <p>颗粒是画布，按钮是 DOM · <span data-word-label>设计</span></p>
+            <button type="button" class="btn tiny" data-next-word>换词</button>
+          </div>
+        </div>
+      </article>
+    </section>
+
+    <section class="note" id="docs">
+      <h2>这是原作静态致敬</h2>
+      <p>
+        灵感来自
+        <a href="https://x.com/BTCqzy1/status/2099440427841597573">@BTCqzy1</a>
+        的审美工作流：Product Design + GSAP + Canvas UI。
+        本页用 CDN GSAP 与自写 Canvas 演示节奏和冲击，不是插件源码，也不需要 Workers。
+      </p>
+      <ul>
+        <li>GSAP 负责标题入场、路径巡游、滚动钉住换幕。</li>
+        <li>Canvas 负责流体玻璃与粒子揭幕；DOM 按钮保持可点。</li>
+        <li>静态文件位于 <code>apps/gsap-canvas/</code>，Cloudflare Pages 直接托管。</li>
+      </ul>
+    </section>
+  </main>
+
+  <footer class="foot">
+    <a href="/">← bookmark-demo-lab 首页</a>
+    <span>apps/gsap-canvas</span>
+  </footer>
+
+  <script src="https://cdn.jsdelivr.net/npm/gsap@3.13.0/dist/gsap.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/gsap@3.13.0/dist/ScrollTrigger.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/gsap@3.13.0/dist/MotionPathPlugin.min.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>
