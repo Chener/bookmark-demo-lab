@@ -11,6 +11,19 @@
   <link rel="stylesheet" href="styles.css" />
 </head>
 <body>
+  <svg class="svg-defs" width="0" height="0" aria-hidden="true">
+    <defs>
+      <filter id="tear" x="-10%" y="-12%" width="120%" height="124%">
+        <feTurbulence type="fractalNoise" baseFrequency="0.04 0.07" numOctaves="3" seed="12" result="n" />
+        <feDisplacementMap in="SourceGraphic" in2="n" scale="18" xChannelSelector="R" yChannelSelector="G" />
+      </filter>
+      <filter id="tear-sm" x="-8%" y="-18%" width="116%" height="136%">
+        <feTurbulence type="fractalNoise" baseFrequency="0.06 0.1" numOctaves="3" seed="7" result="n" />
+        <feDisplacementMap in="SourceGraphic" in2="n" scale="12" xChannelSelector="R" yChannelSelector="G" />
+      </filter>
+    </defs>
+  </svg>
+
   <header class="page-bar">
     <a class="back" href="../../">← 返回实验室</a>
     <div class="page-titles">
@@ -44,11 +57,9 @@
             <span class="rays"></span>
             <span class="quote">“</span>
           </div>
-          <article class="torn torn-card">
-            <svg class="torn-shape" viewBox="0 0 860 300" preserveAspectRatio="none" aria-hidden="true">
-              <path class="under" d="M22,54 C58,18 118,36 176,20 C248,2 318,32 402,14 C486,-4 568,28 652,12 C726,0 792,30 838,52 C856,88 848,138 854,184 C860,232 842,268 818,286 C760,308 692,286 622,298 C540,312 458,284 376,300 C292,316 208,286 132,302 C74,312 28,286 14,246 C2,196 12,128 22,54 Z" />
-              <path class="face" d="M26,48 C62,14 122,32 180,16 C252,0 322,28 406,12 C490,-4 570,24 654,10 C726,-2 788,26 834,48 C850,82 844,132 850,178 C856,224 838,260 814,278 C756,298 688,278 618,288 C538,300 456,274 374,290 C292,306 210,278 136,292 C80,302 36,276 20,238 C8,190 16,122 26,48 Z" />
-            </svg>
+          <article class="paper paper-wide">
+            <span class="paper-shadow"></span>
+            <span class="paper-face"></span>
             <div class="torn-body">
               <span class="stamp">这条短片</span>
               <h2><span data-type="a">完全由静态网页</span><span class="comma">，</span><span data-type="b">致敬完成</span></h2>
@@ -63,8 +74,8 @@
 
         <div class="layer" data-scene="steps">
           <svg class="snake" viewBox="0 0 920 420" aria-hidden="true">
-            <path class="snake-dots" d="M70,340 C160,300 190,250 250,210 C320,164 380,150 460,118 C540,86 600,70 690,96 C760,118 800,170 830,230" />
-            <path class="snake-line" d="M70,340 C160,300 190,250 250,210 C320,164 380,150 460,118 C540,86 600,70 690,96 C760,118 800,170 830,230" />
+            <path class="snake-line" d="M74,302 C140,258 176,228 221,202 C292,155 348,112 405,92 C490,74 540,70 589,76" />
+            <path class="snake-dots" d="M589,76 C652,86 688,122 718,160 C752,202 778,232 810,260" />
           </svg>
           <ol class="steps">
             <li style="--x:8%; --y:72%"><span class="num">01</span><span class="label">定稿配音</span></li>
@@ -77,11 +88,10 @@
         </div>
 
         <div class="layer" data-scene="static-first">
-          <article class="torn torn-stack left-stack">
-            <svg class="torn-shape" viewBox="0 0 420 280" preserveAspectRatio="none" aria-hidden="true">
-              <path class="under" d="M18,40 C54,12 110,28 168,14 C230,0 286,26 344,16 C384,8 408,32 412,70 C418,120 406,176 408,220 C410,252 384,272 344,276 C280,284 214,262 150,276 C90,288 36,262 16,224 C4,176 8,96 18,40 Z" />
-              <path class="face" d="M22,36 C58,10 114,24 172,12 C232,0 288,22 346,14 C384,8 404,30 408,66 C414,114 402,170 404,214 C406,246 380,264 342,268 C278,276 214,256 152,268 C94,278 42,254 22,218 C10,172 12,92 22,36 Z" />
-            </svg>
+          <article class="paper paper-stack left-stack">
+            <span class="stack-extra"></span>
+            <span class="paper-shadow"></span>
+            <span class="paper-face"></span>
             <div class="torn-body stack-body">
               <h3>先确认静态</h3>
               <p>画面先定下来</p>
@@ -89,13 +99,12 @@
             </div>
           </article>
           <span class="big-arrow" aria-hidden="true">➜</span>
-          <article class="torn torn-stack right-stack">
-            <svg class="torn-shape" viewBox="0 0 420 280" preserveAspectRatio="none" aria-hidden="true">
-              <path class="under" d="M22,48 C70,10 128,30 186,16 C250,-2 308,28 362,18 C400,10 416,42 414,86 C410,150 422,204 408,244 C392,276 338,268 280,276 C214,286 150,262 90,274 C42,284 10,250 12,204 C14,140 6,86 22,48 Z" />
-              <path class="face" d="M26,44 C74,8 132,26 190,14 C252,-2 310,24 364,16 C398,10 412,40 410,82 C406,146 418,198 404,238 C388,268 336,260 278,268 C214,278 152,256 94,266 C48,276 16,244 16,198 C18,136 10,82 26,44 Z" />
-            </svg>
+          <article class="paper paper-stack right-stack">
+            <span class="stack-extra alt"></span>
+            <span class="paper-shadow"></span>
+            <span class="paper-face"></span>
             <div class="torn-body stack-body">
-              <h3>再做视频</h3>
+              <h3 class="red-head">再做视频</h3>
               <p>效果更稳定</p>
               <span class="mark check-mark" aria-hidden="true">✓</span>
             </div>
@@ -104,19 +113,17 @@
 
         <div class="layer" data-scene="strips">
           <ul class="strips">
-            <li><span class="num">01</span>真实录屏</li>
-            <li><span class="num">02</span>操作截图</li>
-            <li><span class="num">03</span>产品 Logo</li>
-            <li><span class="num">04</span>品牌素材</li>
+            <li><span class="strip-face"></span><span class="num">01</span>真实录屏</li>
+            <li><span class="strip-face"></span><span class="num">02</span>操作截图</li>
+            <li><span class="strip-face"></span><span class="num">03</span>产品 Logo</li>
+            <li><span class="strip-face"></span><span class="num">04</span>品牌素材</li>
           </ul>
         </div>
 
         <div class="layer" data-scene="end">
-          <article class="torn torn-card torn-end">
-            <svg class="torn-shape" viewBox="0 0 860 300" preserveAspectRatio="none" aria-hidden="true">
-              <path class="under" d="M22,54 C58,18 118,36 176,20 C248,2 318,32 402,14 C486,-4 568,28 652,12 C726,0 792,30 838,52 C856,88 848,138 854,184 C860,232 842,268 818,286 C760,308 692,286 622,298 C540,312 458,284 376,300 C292,316 208,286 132,302 C74,312 28,286 14,246 C2,196 12,128 22,54 Z" />
-              <path class="face" d="M26,48 C62,14 122,32 180,16 C252,0 322,28 406,12 C490,-4 570,24 654,10 C726,-2 788,26 834,48 C850,82 844,132 850,178 C856,224 838,260 814,278 C756,298 688,278 618,288 C538,300 456,274 374,290 C292,306 210,278 136,292 C80,302 36,276 20,238 C8,190 16,122 26,48 Z" />
-            </svg>
+          <article class="paper paper-wide">
+            <span class="paper-shadow"></span>
+            <span class="paper-face"></span>
             <div class="torn-body">
               <span class="stamp">最小片</span>
               <h2>撕开报纸，看见节奏</h2>
@@ -162,7 +169,7 @@
   </main>
 
   <footer class="page-foot">
-    原作静态致敬 · 不含 Workers / wrangler / 自定义域 ·
+    原作静态致敬 · 不含 Workers 与自定义域 ·
     <a href="https://x.com/xl_lottie/status/2099342984433324435">源帖</a>
   </footer>
 

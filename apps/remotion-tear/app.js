@@ -67,17 +67,36 @@
   }
 
   function jaggedClip(progress, seed) {
-    const steps = 26;
-    const xBase = progress * 118 - 8;
+    const steps = 48;
+    const xBase = progress * 122 - 10;
     const pts = [];
     for (let i = 0; i <= steps; i += 1) {
       const y = (i / steps) * 100;
       const jag =
-        Math.sin(i * 1.63 + seed) * 3.4 +
-        (hash(i * 19 + seed * 7) - 0.5) * 4.2;
+        Math.sin(i * 2.35 + seed) * 2.1 +
+        Math.sin(i * 0.55 + seed * 0.3) * 1.4 +
+        (hash(i * 19 + seed * 7) - 0.5) * 7.5;
       pts.push(`${(xBase + jag).toFixed(2)}% ${y.toFixed(2)}%`);
     }
-    return `polygon(120% -4%, 120% 104%, ${pts.reverse().join(",")})`;
+    return `polygon(125% -6%, 125% 106%, ${pts.reverse().join(",")})`;
+  }
+
+  function drawSkyline(ctx, x, y, w, h, seed) {
+    ctx.fillStyle = "#c2b7a6";
+    ctx.fillRect(x, y, w, h);
+    ctx.fillStyle = "#a89e8d";
+    const ground = y + h * 0.92;
+    let cx = x + 6;
+    let b = 0;
+    while (cx < x + w - 8) {
+      const bw = 6 + hash(seed + b) * (w * 0.12);
+      const bh = h * (0.28 + hash(seed + b + 3) * 0.55);
+      ctx.fillRect(cx, ground - bh, bw, bh);
+      cx += bw + 2;
+      b += 1;
+    }
+    ctx.fillStyle = "#b7ad9c";
+    ctx.fillRect(x, y, w, 3);
   }
 
   function paintNewsprint() {
@@ -91,54 +110,37 @@
     canvas.style.height = `${h}px`;
     const ctx = canvas.getContext("2d");
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-    ctx.fillStyle = "#e6dfd2";
+    ctx.fillStyle = "#e4dccf";
     ctx.fillRect(0, 0, w, h);
 
-    const cols = 6;
-    const gutter = w * 0.012;
+    const cols = 7;
+    const gutter = w * 0.01;
     const colW = (w - gutter * (cols + 1)) / cols;
-    ctx.fillStyle = "#cfc6b6";
     for (let c = 0; c < cols; c += 1) {
       const x = gutter + c * (colW + gutter);
-      ctx.fillRect(x + colW, 0, 1, h);
-      for (let y = h * 0.08; y < h * 0.96; y += 7) {
-        const lw = colW * (0.55 + hash(c * 80 + y) * 0.4);
-        ctx.globalAlpha = 0.28 + hash(y + c) * 0.2;
-        ctx.fillRect(x + 4, y, lw, 1.2);
+      ctx.fillStyle = "rgba(110, 100, 88, 0.18)";
+      ctx.fillRect(x + colW, h * 0.04, 1, h * 0.82);
+      for (let y = h * 0.07; y < h * 0.86; y += 5) {
+        if (hash(c * 40 + y) > 0.92) {
+          y += 8;
+          continue;
+        }
+        const lw = colW * (0.62 + hash(c * 80 + y) * 0.32);
+        ctx.globalAlpha = 0.22 + hash(y + c) * 0.18;
+        ctx.fillStyle = "#8f8678";
+        ctx.fillRect(x + 3, y, lw, 1.05);
       }
       ctx.globalAlpha = 1;
-      if (c === 0 || c === 5) {
-        const bx = x + 6;
-        const by = h * (c === 0 ? 0.18 : 0.58);
-        const bw = colW - 12;
-        const bh = h * 0.22;
-        ctx.fillStyle = "#c3b9a8";
-        ctx.fillRect(bx, by, bw, bh);
-        ctx.fillStyle = "#a89f90";
-        ctx.beginPath();
-        ctx.moveTo(bx + 8, by + bh - 12);
-        ctx.lineTo(bx + bw * 0.35, by + bh * 0.45);
-        ctx.lineTo(bx + bw * 0.62, by + bh - 18);
-        ctx.lineTo(bx + bw - 6, by + bh - 8);
-        ctx.lineTo(bx + bw - 6, by + bh - 4);
-        ctx.lineTo(bx + 8, by + bh - 4);
-        ctx.fill();
-        ctx.fillStyle = "#cfc6b6";
+      if (c === 0) drawSkyline(ctx, x + 4, h * 0.16, colW - 8, h * 0.2, 11);
+      if (c === 6) drawSkyline(ctx, x + 4, h * 0.52, colW - 8, h * 0.2, 29);
+      if (c === 3) {
+        ctx.globalAlpha = 0.35;
+        ctx.fillStyle = "#7d7468";
+        ctx.font = `700 ${Math.max(9, w * 0.013)}px serif`;
+        ctx.fillText("Daily News", x, h * 0.055);
+        ctx.globalAlpha = 1;
       }
     }
-
-    ctx.globalAlpha = 0.22;
-    ctx.fillStyle = "#8a8174";
-    ctx.font = `${Math.max(10, w * 0.018)}px serif`;
-    ctx.fillText("Daily News", w * 0.08, h * 0.07);
-    ctx.fillText("In Step with a Changing World", w * 0.62, h * 0.94);
-    ctx.globalAlpha = 1;
-
-    ctx.strokeStyle = "rgba(90,80,70,0.18)";
-    ctx.beginPath();
-    ctx.moveTo(w * 0.5, 0);
-    ctx.lineTo(w * 0.5, h);
-    ctx.stroke();
   }
 
   function pad(n) {
@@ -179,9 +181,9 @@
       const a = title.querySelector("[data-type='a']");
       const b = title.querySelector("[data-type='b']");
       const comma = title.querySelector(".comma");
-      if (a) a.style.opacity = local > 28 ? "1" : "0";
-      if (comma) comma.style.opacity = local > 40 ? "1" : "0";
-      if (b) b.style.opacity = local > 46 ? "1" : "0";
+      if (a) a.style.opacity = local > 16 ? "1" : "0";
+      if (comma) comma.style.opacity = local > 26 ? "1" : "0";
+      if (b) b.style.opacity = local > 32 ? "1" : "0";
     }
 
     captionEl.textContent = caption;
