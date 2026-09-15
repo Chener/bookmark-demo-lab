@@ -90,6 +90,7 @@
   function openSearch() {
     if (!overlay) return;
     overlay.classList.add("is-open");
+    document.body.style.overflow = "hidden";
     spotInput?.focus();
     spotInput?.select();
   }
@@ -97,6 +98,7 @@
   function closeSearch() {
     if (!overlay) return;
     overlay.classList.remove("is-open");
+    document.body.style.overflow = "";
   }
 
   document.querySelectorAll(".search-open").forEach((btn) => {

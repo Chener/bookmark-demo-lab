@@ -608,6 +608,10 @@ body.dark .chip,
 body.dark .eyebrow { border-color: #3f3f46; background: transparent; color: inherit; }
 body.dark .links a,
 body.dark .icon-btn { color: #d4d4d8; }
+body.dark .hero-copy p,
+body.dark .tab-copy,
+body.dark .docs .steps { color: var(--muted); }
+body.dark .source a { color: var(--ink); }
 
 @media (max-width: 820px) {
   .hero { grid-template-columns: 1fr; }
