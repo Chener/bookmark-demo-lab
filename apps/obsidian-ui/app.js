@@ -1,8 +1,8 @@
 (() => {
   const tabCopy = {
-    buttons: "Pill slides to the active item. Same energy as a copy-paste tab primitive.",
-    motion: "Swap the panel, keep the chrome. Motion is a first-class prop.",
-    input: "Forms stay quiet until they need to shout. OTP, search, done.",
+    buttons: "滑块会跟到当前项，复制即用的标签页原语。",
+    motion: "换内容、留框架。动效是一等公民。",
+    input: "表单平时安静，需要时才发声。验证码、搜索，一次搞定。",
   };
 
   const magnet = document.querySelector("[data-magnet]");
@@ -136,6 +136,6 @@
   themeBtn?.addEventListener("click", () => {
     const dark = document.body.classList.toggle("dark");
     themeBtn.setAttribute("aria-pressed", String(dark));
-    themeBtn.setAttribute("aria-label", dark ? "Switch to light theme" : "Toggle dark theme");
+    themeBtn.setAttribute("aria-label", dark ? "切换到浅色主题" : "切换深色主题");
   });
 })();
