@@ -1,8 +1,10 @@
 #!/usr/bin/env python3
-"""Cloud-computer rotate beat: settle previous window, ingest X increment (TODO), open next ballot.
+"""Manual / admin fallback for ballot rotate.
 
-Not for Grok Bot. Assumes git + optional curl to the Vote Worker on the box.
-Does not use GitHub Issues.
+Primary scheduler is Cloudflare Workers Cron Triggers on workers/ballot-api
+(UTC 0 0,8,16 * * *). This script is not crontab and not a Grok Bot routine.
+
+Use when Cron failed or you need to git-sync KV snapshots. Does not use GitHub Issues.
 """
 from __future__ import annotations
 
@@ -154,6 +156,144 @@ def vote_api_base(cfg: dict) -> str:
     return str(cfg.get("voteApiBase") or "").strip().rstrip("/")
 
 
+def window_rank(window: dict | None) -> tuple[float | None, str] | None:
+    """Comparable rank: opensAt epoch when parseable, then sortable windowId (YYYY-MM-DD-HH)."""
+    if not isinstance(window, dict):
+        return None
+    wid = str(window.get("windowId") or "").strip()
+    if not wid:
+        return None
+    opens_raw = str(window.get("opensAt") or "").strip()
+    ts: float | None = None
+    if opens_raw:
+        try:
+            ts = parse_iso(opens_raw).timestamp()
+        except (TypeError, ValueError, OSError):
+            ts = None
+    return (ts, wid)
+
+
+def is_strictly_ahead(candidate: dict | None, baseline: dict | None) -> bool:
+    """True only if candidate is strictly after baseline (not mere windowId inequality)."""
+    cr = window_rank(candidate)
+    br = window_rank(baseline)
+    if cr is None or br is None:
+        return False
+    c_ts, c_id = cr
+    b_ts, b_id = br
+    if c_id == b_id:
+        return False
+    if c_ts is not None and b_ts is not None and c_ts != b_ts:
+        return c_ts > b_ts
+    return c_id > b_id
+
+
+def fetch_worker_json(base: str, path: str) -> dict[str, Any] | None:
+    if not base:
+        return None
+    url = f"{base}{path}"
+    req = urllib.request.Request(url, method="GET")
+    try:
+        with urllib.request.urlopen(req, timeout=20) as res:
+            data = json.loads(res.read().decode("utf-8"))
+    except (urllib.error.URLError, TimeoutError, json.JSONDecodeError, UnicodeDecodeError, ValueError):
+        return None
+    if not isinstance(data, dict) or not data.get("ok"):
+        return None
+    return data
+
+
+def fetch_worker_window(base: str) -> dict[str, Any] | None:
+    data = fetch_worker_json(base, "/api/window")
+    if not data:
+        return None
+    window = data.get("window")
+    return window if isinstance(window, dict) else None
+
+
+def fetch_worker_ledger(base: str) -> dict[str, Any] | None:
+    data = fetch_worker_json(base, "/api/ledger")
+    if not data:
+        return None
+    ledger = data.get("ledger")
+    return ledger if isinstance(ledger, dict) else None
+
+
+def ballot_file_from_window(window: dict) -> dict[str, Any]:
+    options = window.get("options") if isinstance(window.get("options"), dict) else {}
+    candidates = window.get("candidates") if isinstance(window.get("candidates"), list) else []
+    return {
+        "version": int(window.get("version") or 1),
+        "windowId": str(window.get("windowId") or ""),
+        "timezone": str(window.get("timezone") or "Asia/Shanghai"),
+        "periodHours": int(window.get("periodHours") or 8),
+        "opensAt": str(window.get("opensAt") or ""),
+        "closesAt": str(window.get("closesAt") or ""),
+        "candidates": candidates,
+        "options": {
+            "fuel": list(options.get("fuel") or []),
+            "harness": list(options.get("harness") or []),
+            "environment": list(options.get("environment") or []),
+        },
+        "ingestNoteZh": str(
+            window.get("ingestNoteZh")
+            or "本窗无新书签增量：Worker Cron 不抓 X。仍可投燃料 / harness / 7×24。"
+        ),
+    }
+
+
+def ledger_file_from_remote(ledger: dict) -> dict[str, Any]:
+    return {
+        "version": int(ledger.get("version") or 1),
+        "lastSettleAt": ledger.get("lastSettleAt"),
+        "settledWindowId": ledger.get("settledWindowId"),
+        "voteCount": int(ledger.get("voteCount") or 0),
+        "tallySource": ledger.get("tallySource"),
+        "tallies": {
+            "fuel": dict((ledger.get("tallies") or {}).get("fuel") or {}),
+            "harness": dict((ledger.get("tallies") or {}).get("harness") or {}),
+            "environment": dict((ledger.get("tallies") or {}).get("environment") or {}),
+            "candidate": dict((ledger.get("tallies") or {}).get("candidate") or {}),
+        },
+        "winningStack": dict(ledger.get("winningStack") or {
+            "fuel": None,
+            "harness": None,
+            "environment": None,
+            "autoPick": True,
+        }),
+        "winningCandidateId": ledger.get("winningCandidateId"),
+        "noteZh": str(ledger.get("noteZh") or ""),
+    }
+
+
+def ack_rotate_flags(base: str, token: str, *, needs_git_push: bool | None = None, needs_x_ingest: bool | None = None) -> None:
+    if not base or not token:
+        print("POST /api/rotate-status/ack skipped (need VOTE_API_BASE / voteApiBase and BALLOT_ADMIN_TOKEN)", file=sys.stderr)
+        return
+    payload: dict[str, Any] = {}
+    if needs_git_push is False:
+        payload["needsGitPush"] = False
+    if needs_x_ingest is False:
+        payload["needsXIngest"] = False
+    if not payload:
+        return
+    url = f"{base}/api/rotate-status/ack"
+    req = urllib.request.Request(
+        url,
+        data=json.dumps(payload).encode("utf-8"),
+        method="POST",
+        headers={
+            "Content-Type": "application/json",
+            "Authorization": f"Bearer {token}",
+        },
+    )
+    try:
+        with urllib.request.urlopen(req, timeout=20) as res:
+            print(f"POST /api/rotate-status/ack -> {res.status}", file=sys.stderr)
+    except (urllib.error.URLError, TimeoutError) as exc:
+        print(f"POST /api/rotate-status/ack failed: {exc}", file=sys.stderr)
+
+
 def fetch_tallies(base: str, window_id: str) -> dict[str, Any]:
     if not window_id:
         raise TallyFetchError("missing_window", "ballot-window.json has no windowId")
@@ -199,6 +339,61 @@ def put_window(base: str, token: str, ballot: dict) -> None:
             print(f"PUT /api/window -> {res.status}", file=sys.stderr)
     except (urllib.error.URLError, TimeoutError) as exc:
         print(f"PUT /api/window failed: {exc}", file=sys.stderr)
+
+
+def sync_worker_snapshots_to_git(
+    base: str,
+    remote_window: dict[str, Any],
+    *,
+    dry_run: bool,
+    no_git: bool,
+    no_push: bool,
+) -> int:
+    """Copy Worker KV window + ledger into tracking JSON. Never invent X bookmarks."""
+    ballot_file = ballot_file_from_window(remote_window)
+    if not ballot_file.get("windowId") or not ballot_file.get("opensAt") or not ballot_file.get("closesAt"):
+        print("ABORT KV→git sync: Worker /api/window payload missing windowId/opensAt/closesAt", file=sys.stderr)
+        return 2
+    ledger = fetch_worker_ledger(base)
+    summary = {
+        "action": "sync_kv_to_git",
+        "nextWindowId": ballot_file["windowId"],
+        "opensAt": ballot_file["opensAt"],
+        "closesAt": ballot_file["closesAt"],
+        "candidateCount": len(ballot_file["candidates"]),
+        "ledgerSettledWindowId": (ledger or {}).get("settledWindowId"),
+        "hadLedger": bool(ledger),
+    }
+    print(json.dumps(summary, ensure_ascii=False, indent=2))
+    if dry_run:
+        print("dry-run: would write tracking/ballot-window.json and tracking/vote-ledger.json")
+        return 0
+    dump_json(BALLOT_PATH, ballot_file)
+    if ledger:
+        dump_json(LEDGER_PATH, ledger_file_from_remote(ledger))
+    else:
+        print("GET /api/ledger missing; left tracking/vote-ledger.json unchanged", file=sys.stderr)
+    git_result = maybe_commit_push(
+        f"rotate: sync KV window {ballot_file['windowId']} to git",
+        no_git=no_git,
+        no_push=no_push,
+        dry_run=dry_run,
+    )
+    if git_result == "pushed":
+        ack_rotate_flags(
+            base,
+            os.environ.get("BALLOT_ADMIN_TOKEN", "").strip(),
+            needs_git_push=False,
+        )
+    else:
+        print(
+            f"ack needsGitPush skipped (git result={git_result}; "
+            "only ack after tracking JSON is committed and pushed)",
+            file=sys.stderr,
+        )
+    if git_result == "failed":
+        return 2
+    return 0
 
 
 def ingest_x_bookmark_increments(period_start: datetime, period_end: datetime) -> list[dict[str, Any]]:
@@ -307,22 +502,31 @@ def git(args: list[str], check: bool = True) -> subprocess.CompletedProcess[str]
     )
 
 
-def maybe_commit_push(message: str, no_git: bool, no_push: bool, dry_run: bool) -> None:
-    if no_git or dry_run:
-        print("git skipped" if no_git else "git skipped (dry-run)")
-        return
-    git(["add", "tracking/ballot-window.json", "tracking/vote-ledger.json"])
-    status = git(["status", "--porcelain"], check=True)
-    if not status.stdout.strip():
-        print("git: nothing to commit")
-        return
-    git(["commit", "-m", message])
-    print(f"git commit: {message}")
-    if no_push:
-        print("git push skipped (--no-push)")
-        return
-    git(["push", "origin", "HEAD"])
-    print("git push: origin HEAD")
+def maybe_commit_push(message: str, no_git: bool, no_push: bool, dry_run: bool) -> str:
+    if dry_run:
+        print("git skipped (dry-run)")
+        return "dry_run"
+    if no_git:
+        print("git skipped")
+        return "no_git"
+    try:
+        git(["add", "tracking/ballot-window.json", "tracking/vote-ledger.json"])
+        status = git(["status", "--porcelain"], check=True)
+        if status.stdout.strip():
+            git(["commit", "-m", message])
+            print(f"git commit: {message}")
+        else:
+            print("git: nothing to commit")
+        if no_push:
+            print("git push skipped (--no-push)")
+            return "no_push"
+        git(["push", "origin", "HEAD"])
+        print("git push: origin HEAD")
+        return "pushed"
+    except subprocess.CalledProcessError as exc:
+        sys.stderr.write(exc.stderr or exc.stdout or str(exc) or "")
+        print("git commit/push failed", file=sys.stderr)
+        return "failed"
 
 
 def self_test() -> int:
@@ -366,6 +570,57 @@ def self_test() -> int:
         raise AssertionError("missing windowId must abort")
     except TallyFetchError as exc:
         assert exc.code == "missing_window"
+    assert fetch_worker_window("") is None
+    assert fetch_worker_ledger("") is None
+    mapped = ballot_file_from_window({
+        "windowId": "2026-09-16-00",
+        "timezone": "Asia/Shanghai",
+        "periodHours": 8,
+        "opensAt": "2026-09-15T16:00:00.000Z",
+        "closesAt": "2026-09-16T00:00:00.000Z",
+        "candidates": [],
+        "options": {"fuel": ["Cursor Ultra"], "harness": ["Cursor Cloud Agent"], "environment": ["托管机"]},
+        "ingestNoteZh": "Worker Cron 不抓 X",
+    })
+    assert mapped["windowId"] == "2026-09-16-00"
+    assert mapped["candidates"] == []
+    assert "伪造" not in mapped["ingestNoteZh"]
+    ledger_mapped = ledger_file_from_remote({
+        "settledWindowId": "2026-09-15-16",
+        "voteCount": 2,
+        "tallySource": "kv",
+        "tallies": {"fuel": {"Cursor Ultra": 2}, "harness": {}, "environment": {}, "candidate": {}},
+        "winningStack": {"fuel": "Cursor Ultra", "harness": None, "environment": None, "autoPick": False},
+        "winningCandidateId": None,
+        "noteZh": "ok",
+    })
+    assert ledger_mapped["settledWindowId"] == "2026-09-15-16"
+    assert ledger_mapped["voteCount"] == 2
+    git_w = {
+        "windowId": "2026-09-15-16",
+        "opensAt": "2026-09-15T08:00:00.000Z",
+    }
+    worker_newer = {
+        "windowId": "2026-09-16-00",
+        "opensAt": "2026-09-15T16:00:00.000Z",
+    }
+    worker_older = {
+        "windowId": "2026-09-15-08",
+        "opensAt": "2026-09-15T00:00:00.000Z",
+    }
+    assert is_strictly_ahead(worker_newer, git_w)
+    assert not is_strictly_ahead(git_w, worker_newer)
+    assert not is_strictly_ahead(worker_older, git_w)
+    assert is_strictly_ahead(git_w, worker_older)
+    assert not is_strictly_ahead(git_w, git_w)
+    assert not is_strictly_ahead(git_w, {"windowId": "2026-09-15-16", "opensAt": "2026-09-15T08:00:00.000Z"})
+    # Mere inequality of ids is not enough if git is later.
+    assert not is_strictly_ahead(
+        {"windowId": "2026-09-15-08", "opensAt": "2026-09-15T00:00:00.000Z"},
+        {"windowId": "2026-09-15-16", "opensAt": "2026-09-15T08:00:00.000Z"},
+    )
+    assert maybe_commit_push("x", no_git=True, no_push=False, dry_run=False) == "no_git"
+    assert maybe_commit_push("x", no_git=False, no_push=False, dry_run=True) == "dry_run"
     print("self-test ok")
     return 0
 
@@ -387,6 +642,34 @@ def main() -> int:
     now = datetime.now(timezone.utc)
     closes = parse_iso(str(ballot["closesAt"]))
     opens = parse_iso(str(ballot["opensAt"]))
+    base = vote_api_base(cfg)
+
+    if not args.force:
+        remote_window = fetch_worker_window(base)
+        if remote_window and remote_window.get("windowId"):
+            if is_strictly_ahead(remote_window, ballot):
+                print(
+                    f"Worker Cron is strictly ahead ({remote_window.get('windowId')} "
+                    f"opens {remote_window.get('opensAt')}; git JSON still "
+                    f"{ballot.get('windowId')}); sync KV → git, skip python settle.",
+                    file=sys.stderr,
+                )
+                return sync_worker_snapshots_to_git(
+                    base,
+                    remote_window,
+                    dry_run=args.dry_run,
+                    no_git=args.no_git,
+                    no_push=args.no_push,
+                )
+            if is_strictly_ahead(ballot, remote_window):
+                print(
+                    f"git JSON is ahead of Worker ({ballot.get('windowId')} vs "
+                    f"{remote_window.get('windowId')}); not overwriting tracking JSON; "
+                    "not acking needsGitPush. Healing Worker via PUT /api/window.",
+                    file=sys.stderr,
+                )
+                if not args.dry_run:
+                    put_window(base, os.environ.get("BALLOT_ADMIN_TOKEN", "").strip(), ballot)
 
     if now < closes and not args.force:
         print(f"window {ballot.get('windowId')} still open until {ballot.get('closesAt')}; nothing to settle")
@@ -450,12 +733,14 @@ def main() -> int:
     dump_json(LEDGER_PATH, settled["ledger"])
     dump_json(BALLOT_PATH, next_ballot)
     put_window(vote_api_base(cfg), os.environ.get("BALLOT_ADMIN_TOKEN", "").strip(), next_ballot)
-    maybe_commit_push(
+    git_result = maybe_commit_push(
         f"rotate: settle {settled['ledger']['settledWindowId']}, open {next_ballot['windowId']}",
         no_git=args.no_git,
         no_push=args.no_push,
         dry_run=args.dry_run,
     )
+    if git_result == "failed":
+        return 2
     return 0
 
 

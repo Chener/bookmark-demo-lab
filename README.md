@@ -13,23 +13,23 @@ tracking/arsenal.json             # 军火库：燃料 / harness / 7×24（仅 a
 tracking/rotate-config.json       # 轮转：时区、periodHours、slotHours、voteApiBase
 tracking/ballot-window.json      # 当前投票窗 + 待投票候选 + 可选项
 tracking/vote-ledger.json         # 上一窗结算账本（winningStack / autoPick）
-workers/ballot-api/               # 唯一后端：投票 Worker + KV（源码；需单独 deploy）
-scripts/rotate-beat.sh            # 云电脑 cron 入口
+workers/ballot-api/               # 唯一后端：投票 + KV + Workers Cron Triggers
+scripts/rotate-beat.py            # 人工/管理员回退（Cron 才是主调度）
 index.html                        # 枢纽：卡片 + 待投票 + 军火库 + 原帖
 ```
 
 枢纽与演示仍是 **静态 Cloudflare Pages**（Framework preset: None，构建命令留空，输出目录 `/`）。不要自定义域名、CNAME、Workers Builds，也不要另开 Pages/Workers 项目。
 
-唯一例外：静态 Pages **无法按 IP 做「每窗一票」**，因此本仓库附带 **一个** Worker + KV（`workers/ballot-api/`），只服务 `GET/POST /api/vote`（及 cron 用的 `PUT /api/window`）。不要再加第二个 Worker 或 Pages Function。仓库里是 `wrangler.toml.example`，避免 Pages 误走 Workers Builds。
+唯一例外：静态 Pages **无法按 IP 做「每窗一票」**，因此本仓库附带 **一个** Worker + KV（`workers/ballot-api/`）：`GET/POST /api/vote`、窗快照、以及 **Cloudflare Workers Cron Triggers** 的 slim 转窗。不要再加第二个 Worker 或 Pages Function。仓库里是 `wrangler.toml.example`，避免 Pages 误走 Workers Builds。
 
 ## 8 小时投票轮转（上海）
 
-Captain 产品节拍默认 **Asia/Shanghai、periodHours=8**，整点窗 **00:00 / 08:00 / 16:00**。`periodHours` 允许改为 **2** 或 **1**（同时改 `slotHours` 与 cron）。
+Captain 产品节拍默认 **Asia/Shanghai、periodHours=8**，整点窗 **00:00 / 08:00 / 16:00**。`periodHours` 允许改为 **2** 或 **1**（同时改 `slotHours` 与 Wrangler cron）。
 
-每个 beat 同时：
+每个 beat：
 
-1. **结算刚结束的投票窗** → 按 Worker 计票选出下一场演示的燃料 / harness / 7×24（燃料名里若带模型，由编排器解析）。零票则 `winningStack.autoPick=true`，编排器从军火库 **active** 项自选。
-2. **摄入刚结束时段的 X 书签增量** 到枢纽「待投票」，并带自动起草的演示计划预览；该名单是下一窗的选票。无 X 凭证则 `candidates=[]`，**绝不伪造书签**。
+1. **结算刚结束的投票窗**（Worker Cron 读 KV 计票）→ 选出下一场演示的燃料 / harness / 7×24。零票则 `winningStack.autoPick=true`，编排器从军火库 **active** 项自选。
+2. **打开下一窗** 写入 KV。X 书签增量与 git 同步 **不在 Worker 内执行**；只置 `rotate-status.needsXIngest` / `needsGitPush` 给后续 harness。无 X 凭证则 `candidates=[]`，**绝不伪造书签**。
 
 ### 配置旋钮（`tracking/rotate-config.json`）
 
@@ -48,49 +48,72 @@ Captain 产品节拍默认 **Asia/Shanghai、periodHours=8**，整点窗 **00:00
 - **禁止** GitHub Issue / 评论当票箱，也 **没有** 站外提交 X 链接的表单。
 - 实时计票来自 `GET /api/vote`；接口未绑定时只读 `vote-ledger.json`。
 
-### Vote Worker + KV（最小后端）
+### Vote Worker + KV（干净账号：只允许 1 Worker + 1 KV）
 
-源码：`workers/ballot-api/src/index.js`。绑定与部署（在本机/云电脑，**不要**从 Pages 再开项目）：
+干净 Cloudflare 账号部署清单。**只创建 1 个 Worker + 1 个 KV**。禁止再开/删除其它 Workers 或 Pages 项目，禁止 Workers Builds，禁止自定义域 / CNAME。
+
+源码：`workers/ballot-api/src/index.js`。在本机或已有云电脑执行（**不要**从 Pages 再开项目）：
 
 ```bash
 cd workers/ballot-api
 cp wrangler.toml.example wrangler.toml   # 已 gitignore，勿提交
+
+# 1) 仅一次：创建名为 ballot-votes 的 KV，把返回的 id 写入 wrangler.toml [[kv_namespaces]].id
 npx wrangler kv namespace create ballot-votes
-# 把返回的 id 写入 wrangler.toml 的 kv_namespaces.id
-# wrangler.toml [vars] ORIGIN = 现有 Pages 生产 URL
+
+# 2) 确认 wrangler.toml：
+#    name = "ballot-api"
+#    [triggers] crons = ["0 0,8,16 * * *"]
+#    [vars] ORIGIN = 现有 Pages 生产 URL（如 https://bookmark-demo-lab.pages.dev）
+#    [vars] RAW_BASE = https://raw.githubusercontent.com/Chener/bookmark-demo-lab/main
+
+# 3) 两个 secrets（必填；不要写进仓库）
 npx wrangler secret put VOTE_SALT
 npx wrangler secret put BALLOT_ADMIN_TOKEN
+
+# 4) 部署同一个 Worker（会带上 Cron Trigger）
 npx wrangler deploy
 ```
 
-| 资源 | 名称 |
-| --- | --- |
-| Worker | `ballot-api` |
-| KV namespace | `ballot-votes`（binding `BALLOT_KV`） |
-| 路由 | `https://ballot-api.<account>.workers.dev/api/vote` |
-| 可选同源 | 在 **已有** Pages 主机加 Worker 路由 `…pages.dev/api/*`，然后 `voteApiBase=""` |
+部署成功后终端会打印 `https://ballot-api.<account-subdomain>.workers.dev`。把该 URL（**不要尾斜杠**）写入 `tracking/rotate-config.json` 的 `voteApiBase`，提交并推 `main`，枢纽才能跨域 POST。
+
+| 资源 | 名称 | 数量 |
+| --- | --- | --- |
+| Worker | `ballot-api` | **1** |
+| KV namespace | `ballot-votes`（binding `BALLOT_KV`） | **1** |
+| Cron Trigger | UTC `0 0,8,16 * * *` | 挂在上述 Worker 上 |
+| 路由 | `https://ballot-api.<account>.workers.dev` | workers.dev，不要自定义域 |
+| 可选同源 | 在 **已有** Pages 主机加 Worker 路由 `…pages.dev/api/*`，然后 `voteApiBase=""` | 仍是这一个 Worker |
 
 **IP 去重：** `POST /api/vote` 读取 `CF-Connecting-IP`，与 `windowId` + `VOTE_SALT` 做 SHA-256，KV 键 `voted:{windowId}:{hash}` 命中则 `409 already_voted`。原始 IP 不入库。可选 `fingerprint`（浏览器 UUID）同样哈希后写入 `fp:{windowId}:…`。计票 JSON 在 `tally:{windowId}`。
 
-把 Worker URL 写入 `tracking/rotate-config.json` 的 `voteApiBase`（不要尾斜杠），推 `main` 后枢纽即可跨域 POST。Worker CORS **只允许** `ORIGIN`（wrangler `[vars]`）与 `localhost` / `127.0.0.1`，不含 `*.pages.dev` 通配。`VOTE_SALT` 未设置时 POST 直接 `503 misconfigured`。
+Worker CORS **只允许** `ORIGIN`（wrangler `[vars]`）与 `localhost` / `127.0.0.1`，不含 `*.pages.dev` 通配。`VOTE_SALT` 未设置时 POST 直接 `503 misconfigured`。
 
-Cron 结算：Vote API 失败或 `voteApiBase` 为空则 **中止**（非零退出），不会写成零票 `autoPick` 并推进下一窗。
+### Cron（Cloudflare Workers Cron Triggers，主路径）
 
-### Cron（云电脑，不是 Grok Bot）
+调度在 **Cloudflare Workers Cron Triggers** 上，表达式 UTC `0 0,8,16 * * *`（`00:00/08:00/16:00` UTC ≡ 上海 `08:00/16:00/00:00`）。**不是**本机 crontab，**不是** Grok Bot。
 
-详见 `scripts/rotate-beat.md`。机器 `TZ=Asia/Shanghai`：
+`scheduled` 只做 CPU 很轻的事（Free 约 10ms）：KV 读写 + `fetch` Pages / GitHub raw 的 `rotate-config.json` / `arsenal.json` / `ballot-window.json`。`periodHours` / `slotHours` 以 rotate-config（拉取或 KV 缓存）为准。结算语义与 `scripts/rotate-beat.py` 相同，但：
 
-```cron
-0 0,8,16 * * * cd /path/to/bookmark-demo-lab && git pull --ff-only origin main && ./scripts/rotate-beat.sh >> /var/log/rotate-beat.log 2>&1
+- 计票直接读 KV `tally:{windowId}`（不 HTTP 自己、不 `gh issue`）
+- 账本与下一窗快照写 KV（`vote-ledger`、`current-window`）
+- **不**跑 agy、git、X 抓取、重演示构建
+- 若还需要 X ingest / git push，只写 KV `rotate-status`（`needsGitPush` / `needsXIngest`）给后续 harness。**skip / lock / 失败不会清掉这些标志**；harness 完成后 `POST /api/rotate-status/ack`（Bearer `BALLOT_ADMIN_TOKEN`，body 里把对应字段设为 `false`）。
+
+改 `periodHours` 时同步改 `slotHours` 与 `wrangler.toml` 的 cron，然后 `npx wrangler deploy`。
+
+管理员可 `POST /api/rotate`（Bearer `BALLOT_ADMIN_TOKEN`）手动跑同一套 slim 转窗。`scripts/rotate-beat.py` 仅作回退：Worker **严格超前** git 时才 `GET /api/window` + `/api/ledger` 写入 tracking JSON 并在 **commit+push 成功后** ack `needsGitPush`；git 超前时不覆盖 JSON，可 PUT 回 Worker。Cron 故障时才自己 settle。详见 `scripts/rotate-beat.md`。
+
+Harness 清标志：
+
+```bash
+curl -X POST "$VOTE_API_BASE/api/rotate-status/ack" \
+  -H "Authorization: Bearer $BALLOT_ADMIN_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{"needsGitPush":false,"needsXIngest":false}'
 ```
 
-UTC 等价（`00:00/08:00/16:00` UTC ≡ `08:00/16:00/00:00` 上海）：
-
-```cron
-0 0,8,16 * * * cd /path/to/bookmark-demo-lab && git pull --ff-only origin main && ./scripts/rotate-beat.sh >> /var/log/rotate-beat.log 2>&1
-```
-
-结算走 `GET {voteApiBase}/api/vote`，**不**调用 `gh issue`。
+python 回退路径：Vote API 失败或 `voteApiBase` 为空则 **中止**（非零退出），不会写成零票 `autoPick` 并推进下一窗。
 
 ## 中文界面约定
 

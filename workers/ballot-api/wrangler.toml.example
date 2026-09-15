@@ -1,6 +1,7 @@
 # Copy to wrangler.toml locally (do not commit the copy).
-# This Worker is the only backend: vote POST + tally GET + KV IP dedupe.
+# This Worker is the only backend: vote POST + tally GET + KV IP dedupe + Cron rotate.
 # Do not create extra Workers/Pages projects, custom domains, CNAME, or Workers Builds.
+# Clean Cloudflare account: exactly 1 Worker (ballot-api) + 1 KV (ballot-votes).
 
 name = "ballot-api"
 main = "src/index.js"
@@ -12,19 +13,29 @@ compatibility_date = "2026-09-15"
 binding = "BALLOT_KV"
 id = "REPLACE_WITH_KV_NAMESPACE_ID"
 
+# Cloudflare Workers Cron Triggers (UTC). NOT local crontab, NOT Grok Bot.
+# 00:00 / 08:00 / 16:00 UTC ≡ Asia/Shanghai 08:00 / 16:00 / 00:00.
+# If you change periodHours/slotHours, change this expression to match.
+[triggers]
+crons = ["0 0,8,16 * * *"]
+
 [vars]
-# Production Pages origin (Worker fetches ballot-window.json + arsenal.json when KV has no window snapshot).
+# Production Pages origin (Worker fetches rotate-config / ballot-window / arsenal).
 ORIGIN = "https://bookmark-demo-lab.pages.dev"
+# GitHub raw fallback when Pages origin is unreachable (same files, main branch).
+RAW_BASE = "https://raw.githubusercontent.com/Chener/bookmark-demo-lab/main"
 
 # Secrets (required; do not put real values here):
 #   npx wrangler secret put VOTE_SALT            # required; POST fails 503 if unset (no fallback salt)
-#   npx wrangler secret put BALLOT_ADMIN_TOKEN    # cron PUT /api/window
+#   npx wrangler secret put BALLOT_ADMIN_TOKEN    # admin PUT /api/window, POST /api/rotate, POST /api/rotate-status/ack
 # CORS allows ORIGIN above plus localhost / 127.0.0.1 only (no *.pages.dev wildcard).
 #
-# Deploy:
+# Deploy (from workers/ballot-api, after copying this file to wrangler.toml):
 #   npx wrangler deploy
 # Public URL pattern:
 #   https://ballot-api.<account>.workers.dev/api/vote
+# After deploy: write that origin (no trailing slash) into
+#   tracking/rotate-config.json → voteApiBase, then commit.
 # Optional same-origin (no extra project): add a route on the existing Pages hostname
 #   bookmark-demo-lab.pages.dev/api/*
 # then leave tracking/rotate-config.json voteApiBase as "".

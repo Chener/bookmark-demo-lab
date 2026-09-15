@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
-# Cloud-computer cron entrypoint (not Grok Bot). Requires python3, git; curl via stdlib.
+# Manual/admin fallback for ballot rotate. Primary scheduler is
+# Cloudflare Workers Cron Triggers on ballot-api (not crontab, not Grok Bot).
 set -euo pipefail
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$ROOT"

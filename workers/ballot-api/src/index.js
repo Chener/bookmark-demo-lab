@@ -1,14 +1,32 @@
 /**
- * ballot-api — single Cloudflare Worker for hub voting.
+ * ballot-api — single Cloudflare Worker for hub voting + Cron rotate.
  * KV binding: BALLOT_KV
  * Secrets: VOTE_SALT, BALLOT_ADMIN_TOKEN
- * Vars: ORIGIN
+ * Vars: ORIGIN, RAW_BASE
  *
  * GET  /api/health
  * GET  /api/vote?windowId=
  * POST /api/vote
- * PUT  /api/window   (cron / admin; Bearer BALLOT_ADMIN_TOKEN)
+ * GET  /api/window
+ * PUT  /api/window         (admin; Bearer BALLOT_ADMIN_TOKEN)
+ * GET  /api/ledger
+ * GET  /api/rotate-status
+ * POST /api/rotate-status/ack  (admin; clear needsGitPush / needsXIngest)
+ * POST /api/rotate         (admin; same slim settle/open as Cron)
+ *
+ * Scheduled: Cloudflare Workers Cron Triggers UTC 0 0,8,16 * * *
+ * (= Asia/Shanghai 08:00 / 16:00 / 00:00). Not crontab. Not Grok Bot.
  */
+
+import {
+  CRON_UTC,
+  emptyTallies,
+  persistWindow,
+  runRotate,
+  ackRotateFlags,
+  trackingUrls,
+  fetchFirstJson
+} from "./rotate.js";
 
 const RL_WINDOW_S = 60;
 const RL_MAX = 12;
@@ -25,6 +43,12 @@ export default {
     } catch (err) {
       return json(env, request, { ok: false, error: "server_error" }, 500);
     }
+  },
+  async scheduled(controller, env) {
+    await runRotate(env, {
+      scheduledTime: controller.scheduledTime,
+      cron: controller.cron || CRON_UTC
+    });
   }
 };
 
@@ -37,11 +61,35 @@ async function handle(request, env) {
   }
 
   if (path === "/api/health" && request.method === "GET") {
-    return json(env, request, { ok: true, service: "ballot-api" });
+    return json(env, request, {
+      ok: true,
+      service: "ballot-api",
+      cron: CRON_UTC
+    });
+  }
+
+  if (path === "/api/window" && request.method === "GET") {
+    return getWindow(request, env);
   }
 
   if (path === "/api/window" && request.method === "PUT") {
     return putWindow(request, env);
+  }
+
+  if (path === "/api/ledger" && request.method === "GET") {
+    return getLedger(request, env);
+  }
+
+  if (path === "/api/rotate-status/ack" && request.method === "POST") {
+    return postRotateAck(request, env);
+  }
+
+  if (path === "/api/rotate-status" && request.method === "GET") {
+    return getRotateStatus(request, env);
+  }
+
+  if (path === "/api/rotate" && request.method === "POST") {
+    return postRotate(request, env);
   }
 
   if (path === "/api/vote" && request.method === "GET") {
@@ -73,13 +121,62 @@ async function putWindow(request, env) {
     candidates: Array.isArray(body.candidates) ? body.candidates : [],
     options: optionsToArrays(body.options)
   };
-  await env.BALLOT_KV.put("current-window", JSON.stringify(snapshot), {
-    expirationTtl: TALLY_TTL_S
-  });
-  await env.BALLOT_KV.put("window-meta:" + snapshot.windowId, JSON.stringify(snapshot), {
-    expirationTtl: TALLY_TTL_S
-  });
+  await persistWindow(env.BALLOT_KV, snapshot);
   return json(env, request, { ok: true, windowId: snapshot.windowId });
+}
+
+async function getWindow(request, env) {
+  const current = await loadCurrentWindow(env);
+  if (!current || !current.windowId) {
+    return json(env, request, { ok: false, error: "missing_window" }, 404);
+  }
+  return json(env, request, { ok: true, window: current });
+}
+
+async function getLedger(request, env) {
+  const ledger = await env.BALLOT_KV.get("vote-ledger", "json");
+  if (!ledger) {
+    return json(env, request, { ok: false, error: "missing_ledger" }, 404);
+  }
+  return json(env, request, { ok: true, ledger: ledger });
+}
+
+async function getRotateStatus(request, env) {
+  const status = await env.BALLOT_KV.get("rotate-status", "json");
+  if (!status) {
+    return json(env, request, { ok: false, error: "missing_status" }, 404);
+  }
+  return json(env, request, { ok: true, status: status });
+}
+
+async function postRotateAck(request, env) {
+  const token = bearer(request);
+  const expected = String(env.BALLOT_ADMIN_TOKEN || "");
+  if (!expected || token !== expected) {
+    return json(env, request, { ok: false, error: "unauthorized" }, 401);
+  }
+  const body = (await readJson(request)) || {};
+  const result = await ackRotateFlags(env.BALLOT_KV, body);
+  if (!result.ok) {
+    return json(env, request, { ok: false, error: result.error || "missing_status" }, 404);
+  }
+  return json(env, request, { ok: true, status: result.status });
+}
+
+async function postRotate(request, env) {
+  const token = bearer(request);
+  const expected = String(env.BALLOT_ADMIN_TOKEN || "");
+  if (!expected || token !== expected) {
+    return json(env, request, { ok: false, error: "unauthorized" }, 401);
+  }
+  const body = (await readJson(request)) || {};
+  const status = await runRotate(env, {
+    force: !!body.force,
+    cron: "manual",
+    scheduledTime: Date.now()
+  });
+  const code = status && status.ok ? 200 : (status && status.error === "locked" ? 409 : 500);
+  return json(env, request, { ok: !!(status && status.ok), status: status }, code);
 }
 
 async function getTallies(url, request, env) {
@@ -217,9 +314,6 @@ async function postVote(request, env) {
   });
 }
 
-function emptyTallies() {
-  return { voteCount: 0, fuel: {}, harness: {}, environment: {}, candidate: {} };
-}
 
 function bump(map, key) {
   map[key] = (Number(map[key]) || 0) + 1;
@@ -274,13 +368,7 @@ async function loadWindow(env, windowId) {
 }
 
 async function fetchOriginWindow(env) {
-  const origin = String(env.ORIGIN || "").replace(/\/$/, "");
-  if (!origin) return null;
-  const res = await fetch(origin + "/tracking/ballot-window.json", {
-    cf: { cacheTtl: 30, cacheEverything: true }
-  });
-  if (!res.ok) return null;
-  const data = await res.json();
+  const data = await fetchFirstJson(trackingUrls(env, "ballot-window.json"));
   if (!data || !data.windowId) return null;
   return {
     windowId: String(data.windowId),
@@ -308,14 +396,12 @@ async function resolveOptions(env, window) {
 
 async function fetchActiveArsenal(env) {
   const empty = { fuel: new Set(), harness: new Set(), environment: new Set() };
-  const origin = String(env.ORIGIN || "").replace(/\/$/, "");
-  if (!origin) return empty;
   try {
-    const res = await fetch(origin + "/tracking/arsenal.json", {
-      cf: { cacheTtl: 60, cacheEverything: true }
-    });
-    if (!res.ok) return empty;
-    const data = await res.json();
+    const data = await fetchFirstJson(trackingUrls(env, "arsenal.json"));
+    if (!data) {
+      const cached = await env.BALLOT_KV.get("arsenal", "json");
+      return cached ? activeSetsFromArsenal(cached) : empty;
+    }
     return activeSetsFromArsenal(data);
   } catch (_) {
     return empty;
