@@ -1,0 +1,102 @@
+{
+  "version": 1,
+  "updatedAt": "2026-09-15T08:52:00.000Z",
+  "sections": [
+    {
+      "id": "fuel",
+      "titleZh": "燃料 (Fuel)",
+      "blurbZh": "高性价比 ≤~$20 或前沿免费主力模型方案",
+      "items": [
+        {
+          "nameZh": "Cursor Ultra",
+          "status": "active",
+          "noteZh": "启用 · 主力编程与 Cloud Agent 额度"
+        },
+        {
+          "nameZh": "Google AI Pro · Antigravity / alphatradebot",
+          "status": "active",
+          "noteZh": "启用 · agy 已用，前沿长上下文与推理"
+        },
+        {
+          "nameZh": "OpenRouter 前沿免费",
+          "status": "active",
+          "noteZh": "启用 · 零边际成本前沿免费模型路由"
+        },
+        {
+          "nameZh": "OpenCode",
+          "status": "planned",
+          "noteZh": "规划中 · 开源终端代码 Agent"
+        },
+        {
+          "nameZh": "Command Code",
+          "status": "planned",
+          "noteZh": "规划中 · 命令行交互 Agent"
+        },
+        {
+          "nameZh": "Devin",
+          "status": "planned",
+          "noteZh": "规划中 · 自治软件工程师 Agent"
+        },
+        {
+          "nameZh": "国内 qcode",
+          "status": "planned",
+          "noteZh": "规划中 · 国产大模型代码助手"
+        },
+        {
+          "nameZh": "CodeBuddy",
+          "status": "planned",
+          "noteZh": "规划中 · 辅助结对编程方案"
+        }
+      ]
+    },
+    {
+      "id": "harness",
+      "titleZh": "运行载体 (Harness)",
+      "blurbZh": "官方优先执行器与命令端载体",
+      "items": [
+        {
+          "nameZh": "Cursor Cloud Agent",
+          "status": "active",
+          "noteZh": "官方优先 · 云端自主分支与演示交付"
+        },
+        {
+          "nameZh": "Cursor CLI",
+          "status": "active",
+          "noteZh": "官方优先 · 终端无缝连接与自动化执行"
+        },
+        {
+          "nameZh": "agy / Antigravity",
+          "status": "active",
+          "noteZh": "官方优先 · 高阶自治编程智能体"
+        },
+        {
+          "nameZh": "pi (OpenRouter 侧)",
+          "status": "active",
+          "noteZh": "OpenRouter 模型路由交互载体"
+        }
+      ]
+    },
+    {
+      "id": "environment",
+      "titleZh": "7×24 环境 (Environment)",
+      "blurbZh": "常驻云主机与无间断自动化节点",
+      "items": [
+        {
+          "nameZh": "Cursor Cloud Agent 托管机",
+          "status": "active",
+          "noteZh": "云端沙盒环境，全自动跑测试与发预览"
+        },
+        {
+          "nameZh": "Grok Bot 云电脑",
+          "status": "active",
+          "noteZh": "常驻云端桌面与自动化任务节点"
+        },
+        {
+          "nameZh": "自购 VPS / 便宜 KVM",
+          "status": "active",
+          "noteZh": "Vultr 现作梯子；可按需随时另开独立 Agent 专用机"
+        }
+      ]
+    }
+  ]
+}
