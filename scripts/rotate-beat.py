@@ -156,6 +156,38 @@ def vote_api_base(cfg: dict) -> str:
     return str(cfg.get("voteApiBase") or "").strip().rstrip("/")
 
 
+def window_rank(window: dict | None) -> tuple[float | None, str] | None:
+    """Comparable rank: opensAt epoch when parseable, then sortable windowId (YYYY-MM-DD-HH)."""
+    if not isinstance(window, dict):
+        return None
+    wid = str(window.get("windowId") or "").strip()
+    if not wid:
+        return None
+    opens_raw = str(window.get("opensAt") or "").strip()
+    ts: float | None = None
+    if opens_raw:
+        try:
+            ts = parse_iso(opens_raw).timestamp()
+        except (TypeError, ValueError, OSError):
+            ts = None
+    return (ts, wid)
+
+
+def is_strictly_ahead(candidate: dict | None, baseline: dict | None) -> bool:
+    """True only if candidate is strictly after baseline (not mere windowId inequality)."""
+    cr = window_rank(candidate)
+    br = window_rank(baseline)
+    if cr is None or br is None:
+        return False
+    c_ts, c_id = cr
+    b_ts, b_id = br
+    if c_id == b_id:
+        return False
+    if c_ts is not None and b_ts is not None and c_ts != b_ts:
+        return c_ts > b_ts
+    return c_id > b_id
+
+
 def fetch_worker_json(base: str, path: str) -> dict[str, Any] | None:
     if not base:
         return None
@@ -341,17 +373,26 @@ def sync_worker_snapshots_to_git(
         dump_json(LEDGER_PATH, ledger_file_from_remote(ledger))
     else:
         print("GET /api/ledger missing; left tracking/vote-ledger.json unchanged", file=sys.stderr)
-    maybe_commit_push(
+    git_result = maybe_commit_push(
         f"rotate: sync KV window {ballot_file['windowId']} to git",
         no_git=no_git,
         no_push=no_push,
         dry_run=dry_run,
     )
-    ack_rotate_flags(
-        base,
-        os.environ.get("BALLOT_ADMIN_TOKEN", "").strip(),
-        needs_git_push=False,
-    )
+    if git_result == "pushed":
+        ack_rotate_flags(
+            base,
+            os.environ.get("BALLOT_ADMIN_TOKEN", "").strip(),
+            needs_git_push=False,
+        )
+    else:
+        print(
+            f"ack needsGitPush skipped (git result={git_result}; "
+            "only ack after tracking JSON is committed and pushed)",
+            file=sys.stderr,
+        )
+    if git_result == "failed":
+        return 2
     return 0
 
 
@@ -461,22 +502,31 @@ def git(args: list[str], check: bool = True) -> subprocess.CompletedProcess[str]
     )
 
 
-def maybe_commit_push(message: str, no_git: bool, no_push: bool, dry_run: bool) -> None:
-    if no_git or dry_run:
-        print("git skipped" if no_git else "git skipped (dry-run)")
-        return
-    git(["add", "tracking/ballot-window.json", "tracking/vote-ledger.json"])
-    status = git(["status", "--porcelain"], check=True)
-    if not status.stdout.strip():
-        print("git: nothing to commit")
-        return
-    git(["commit", "-m", message])
-    print(f"git commit: {message}")
-    if no_push:
-        print("git push skipped (--no-push)")
-        return
-    git(["push", "origin", "HEAD"])
-    print("git push: origin HEAD")
+def maybe_commit_push(message: str, no_git: bool, no_push: bool, dry_run: bool) -> str:
+    if dry_run:
+        print("git skipped (dry-run)")
+        return "dry_run"
+    if no_git:
+        print("git skipped")
+        return "no_git"
+    try:
+        git(["add", "tracking/ballot-window.json", "tracking/vote-ledger.json"])
+        status = git(["status", "--porcelain"], check=True)
+        if status.stdout.strip():
+            git(["commit", "-m", message])
+            print(f"git commit: {message}")
+        else:
+            print("git: nothing to commit")
+        if no_push:
+            print("git push skipped (--no-push)")
+            return "no_push"
+        git(["push", "origin", "HEAD"])
+        print("git push: origin HEAD")
+        return "pushed"
+    except subprocess.CalledProcessError as exc:
+        sys.stderr.write(exc.stderr or exc.stdout or str(exc) or "")
+        print("git commit/push failed", file=sys.stderr)
+        return "failed"
 
 
 def self_test() -> int:
@@ -546,6 +596,31 @@ def self_test() -> int:
     })
     assert ledger_mapped["settledWindowId"] == "2026-09-15-16"
     assert ledger_mapped["voteCount"] == 2
+    git_w = {
+        "windowId": "2026-09-15-16",
+        "opensAt": "2026-09-15T08:00:00.000Z",
+    }
+    worker_newer = {
+        "windowId": "2026-09-16-00",
+        "opensAt": "2026-09-15T16:00:00.000Z",
+    }
+    worker_older = {
+        "windowId": "2026-09-15-08",
+        "opensAt": "2026-09-15T00:00:00.000Z",
+    }
+    assert is_strictly_ahead(worker_newer, git_w)
+    assert not is_strictly_ahead(git_w, worker_newer)
+    assert not is_strictly_ahead(worker_older, git_w)
+    assert is_strictly_ahead(git_w, worker_older)
+    assert not is_strictly_ahead(git_w, git_w)
+    assert not is_strictly_ahead(git_w, {"windowId": "2026-09-15-16", "opensAt": "2026-09-15T08:00:00.000Z"})
+    # Mere inequality of ids is not enough if git is later.
+    assert not is_strictly_ahead(
+        {"windowId": "2026-09-15-08", "opensAt": "2026-09-15T00:00:00.000Z"},
+        {"windowId": "2026-09-15-16", "opensAt": "2026-09-15T08:00:00.000Z"},
+    )
+    assert maybe_commit_push("x", no_git=True, no_push=False, dry_run=False) == "no_git"
+    assert maybe_commit_push("x", no_git=False, no_push=False, dry_run=True) == "dry_run"
     print("self-test ok")
     return 0
 
@@ -571,19 +646,30 @@ def main() -> int:
 
     if not args.force:
         remote_window = fetch_worker_window(base)
-        if remote_window and remote_window.get("windowId") and remote_window.get("windowId") != ballot.get("windowId"):
-            print(
-                f"Worker Cron already opened {remote_window.get('windowId')} "
-                f"(git JSON still {ballot.get('windowId')}); sync KV → git, skip python settle.",
-                file=sys.stderr,
-            )
-            return sync_worker_snapshots_to_git(
-                base,
-                remote_window,
-                dry_run=args.dry_run,
-                no_git=args.no_git,
-                no_push=args.no_push,
-            )
+        if remote_window and remote_window.get("windowId"):
+            if is_strictly_ahead(remote_window, ballot):
+                print(
+                    f"Worker Cron is strictly ahead ({remote_window.get('windowId')} "
+                    f"opens {remote_window.get('opensAt')}; git JSON still "
+                    f"{ballot.get('windowId')}); sync KV → git, skip python settle.",
+                    file=sys.stderr,
+                )
+                return sync_worker_snapshots_to_git(
+                    base,
+                    remote_window,
+                    dry_run=args.dry_run,
+                    no_git=args.no_git,
+                    no_push=args.no_push,
+                )
+            if is_strictly_ahead(ballot, remote_window):
+                print(
+                    f"git JSON is ahead of Worker ({ballot.get('windowId')} vs "
+                    f"{remote_window.get('windowId')}); not overwriting tracking JSON; "
+                    "not acking needsGitPush. Healing Worker via PUT /api/window.",
+                    file=sys.stderr,
+                )
+                if not args.dry_run:
+                    put_window(base, os.environ.get("BALLOT_ADMIN_TOKEN", "").strip(), ballot)
 
     if now < closes and not args.force:
         print(f"window {ballot.get('windowId')} still open until {ballot.get('closesAt')}; nothing to settle")
@@ -647,12 +733,14 @@ def main() -> int:
     dump_json(LEDGER_PATH, settled["ledger"])
     dump_json(BALLOT_PATH, next_ballot)
     put_window(vote_api_base(cfg), os.environ.get("BALLOT_ADMIN_TOKEN", "").strip(), next_ballot)
-    maybe_commit_push(
+    git_result = maybe_commit_push(
         f"rotate: settle {settled['ledger']['settledWindowId']}, open {next_ballot['windowId']}",
         no_git=args.no_git,
         no_push=args.no_push,
         dry_run=args.dry_run,
     )
+    if git_result == "failed":
+        return 2
     return 0
 
 

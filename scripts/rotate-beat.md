@@ -30,7 +30,8 @@ Worker Cron 只做：KV 读计票 → 结算上一窗 → 打开下一窗写入 
 
 1. 读 `tracking/rotate-config.json`、`tracking/arsenal.json`、`tracking/ballot-window.json`
 2. 若当前窗仍未关闭则退出 0（`--force` 除外）
-3. 若 Worker `GET /api/window` 的 `windowId` 已超前 git JSON → **同步 KV→git**（`GET /api/window` + `GET /api/ledger` 写入 `tracking/ballot-window.json` 与 `tracking/vote-ledger.json`，不伪造 X 书签；成功写入后 `POST /api/rotate-status/ack` 只清 `needsGitPush`），然后退出 0，不 settle
+3. 若 Worker `GET /api/window` **严格超前** git JSON（先比 `opensAt`，再比可排序 `windowId` `YYYY-MM-DD-HH`；不是「windowId 不相等就同步」）→ **同步 KV→git**（写入 `tracking/ballot-window.json` + `vote-ledger.json`，不伪造 X 书签）。**仅在 git commit 且 `git push` 成功后** 才 `POST /api/rotate-status/ack` 清 `needsGitPush`。`--no-git` / `--no-push` / push 失败 **不清** 标志。然后退出 0，不 settle。
+   - 若 **git 超前** Worker：不覆盖 tracking JSON，不 ack。可选且默认：`PUT /api/window` 把 git 快照写回 Worker 以修复分脑（需 `BALLOT_ADMIN_TOKEN`）。然后继续用 git JSON 走后面步骤。
 4. `GET {voteApiBase}/api/vote?windowId={prev}` 计票，写入 `tracking/vote-ledger.json`
    - **真实零票**（接口 `ok` 且 `voteCount=0`）→ `winningStack.autoPick = true`
    - **接口失败 / `voteApiBase` 为空 / 传输错误** → **中止 settle**（非 0 退出）

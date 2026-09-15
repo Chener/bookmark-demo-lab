@@ -102,7 +102,7 @@ Worker CORS **只允许** `ORIGIN`（wrangler `[vars]`）与 `localhost` / `127.
 
 改 `periodHours` 时同步改 `slotHours` 与 `wrangler.toml` 的 cron，然后 `npx wrangler deploy`。
 
-管理员可 `POST /api/rotate`（Bearer `BALLOT_ADMIN_TOKEN`）手动跑同一套 slim 转窗。`scripts/rotate-beat.py` 仅作回退（Worker 窗超前 git 时会 `GET /api/window` + `/api/ledger` 写入 tracking JSON 并 commit；Cron 故障时才自己 settle）；详见 `scripts/rotate-beat.md`。
+管理员可 `POST /api/rotate`（Bearer `BALLOT_ADMIN_TOKEN`）手动跑同一套 slim 转窗。`scripts/rotate-beat.py` 仅作回退：Worker **严格超前** git 时才 `GET /api/window` + `/api/ledger` 写入 tracking JSON 并在 **commit+push 成功后** ack `needsGitPush`；git 超前时不覆盖 JSON，可 PUT 回 Worker。Cron 故障时才自己 settle。详见 `scripts/rotate-beat.md`。
 
 Harness 清标志：
 
