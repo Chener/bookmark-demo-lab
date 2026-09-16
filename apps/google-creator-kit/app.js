@@ -106,11 +106,11 @@
   const pinLabel = document.querySelector("[data-pin-label]");
   const creditsEl = document.querySelector("[data-credits]");
   let credits = 1000;
-  let current = "reverse";
   let pptIndex = 0;
   let pptSlides = [];
   let activeClip = "night";
   let filmTimer = 0;
+  let flowTimer = 0;
 
   function paintCard(item) {
     const btn = document.createElement("button");
@@ -133,7 +133,6 @@
 
   function select(id, opts = {}) {
     const item = usages.find((u) => u.id === id) || usages[4];
-    current = item.id;
     cardsEl.querySelectorAll(".card").forEach((el) => {
       const on = el.dataset.id === item.id;
       el.classList.toggle("is-on", on);
@@ -210,6 +209,8 @@
 
   const polaroids = document.querySelector("[data-polaroids]");
   document.querySelector("[data-flow-go]").addEventListener("click", () => {
+    if (flowTimer) return;
+    window.clearTimeout(flowTimer);
     const plugins = [...document.querySelectorAll("[data-plugin].is-on")].map((el) => el.dataset.plugin);
     const wide = plugins.includes("wide");
     const count = plugins.includes("batch") ? 4 : 2;
@@ -222,7 +223,8 @@
       polaroids.append(wait);
     }
     spend(plugins.includes("style") ? 12 : 8);
-    window.setTimeout(() => {
+    flowTimer = window.setTimeout(() => {
+      flowTimer = 0;
       polaroids.innerHTML = "";
       for (let i = 0; i < count; i += 1) {
         const fig = document.createElement("figure");
@@ -281,6 +283,8 @@
     btn.addEventListener("click", () => {
       activeClip = btn.dataset.clip;
       document.querySelectorAll("[data-clip]").forEach((el) => el.classList.toggle("is-on", el === btn));
+      drawStoryboard(activeClip);
+      if (!film.hidden) startFilm();
     });
   });
 
@@ -299,20 +303,17 @@
     });
   }
 
-  document.querySelector("[data-reverse-go]").addEventListener("click", () => {
-    drawStoryboard(activeClip);
-    spend(10);
-    const film = document.querySelector("[data-film]");
-    film.hidden = true;
-  });
-
   const film = document.querySelector("[data-film]");
   const filmFrame = document.querySelector("[data-film-frame]");
   const filmCap = document.querySelector("[data-film-cap]");
 
-  function playShort() {
+  function stopFilm() {
+    window.clearInterval(filmTimer);
+    filmTimer = 0;
+  }
+
+  function startFilm() {
     const clip = clips[activeClip] || clips.night;
-    if (!board.children.length) drawStoryboard(activeClip);
     film.hidden = false;
     let i = 0;
     const tick = () => {
@@ -321,9 +322,21 @@
       filmFrame.style.filter = `hue-rotate(${i * 28}deg)`;
       i += 1;
     };
+    stopFilm();
     tick();
-    window.clearInterval(filmTimer);
     if (!reduced) filmTimer = window.setInterval(tick, 800);
+  }
+
+  document.querySelector("[data-reverse-go]").addEventListener("click", () => {
+    drawStoryboard(activeClip);
+    spend(10);
+    film.hidden = true;
+    stopFilm();
+  });
+
+  function playShort() {
+    if (!board.children.length) drawStoryboard(activeClip);
+    startFilm();
     spend(15);
   }
 
