@@ -75,33 +75,33 @@ def parse_iso(value: str) -> datetime:
     return datetime.fromisoformat(raw).astimezone(timezone.utc)
 
 
-def slot_hours(cfg: dict) -> list[int]:
-    slots = cfg.get("slotHours")
-    if isinstance(slots, list) and slots:
-        return sorted({int(h) % 24 for h in slots})
-    period = int(cfg.get("periodHours") or 8)
-    if period <= 0:
-        period = 8
-    return list(range(0, 24, period))
-
-
-def tzinfo(cfg: dict) -> ZoneInfo:
-    return ZoneInfo(str(cfg.get("timezone") or "Asia/Shanghai"))
-
-
 def period_hours(cfg: dict) -> int:
-    n = int(cfg.get("periodHours") or 8)
+    try:
+        n = int(cfg.get("periodHours") or 8)
+    except (TypeError, ValueError):
+        n = 8
     return n if n > 0 else 8
 
 
 def vote_window_minutes(cfg: dict) -> int:
-    """Source of truth for closesAt - opensAt. voteWindowMinutes wins; else periodHours * 60."""
-    raw = cfg.get("voteWindowMinutes")
-    if raw is not None:
-        n = int(raw)
-        if n > 0:
-            return n
-    return period_hours(cfg) * 60
+    """Source of truth for closesAt - opensAt. voteWindowMinutes wins; else periodHours * 60.
+
+    Bad / non-positive values fall back (same as Worker JS) so a rotate-config typo
+    does not abort ingest while the Worker keeps running.
+    """
+    raw = cfg.get("voteWindowMinutes") if cfg else None
+    if raw is not None and raw != "":
+        try:
+            n = int(raw)
+            if n > 0:
+                return n
+        except (TypeError, ValueError):
+            pass
+    return period_hours(cfg or {}) * 60
+
+
+def tzinfo(cfg: dict) -> ZoneInfo:
+    return ZoneInfo(str(cfg.get("timezone") or "Asia/Shanghai"))
 
 
 def window_id_for(start_local: datetime, cfg: dict | None = None) -> str:
@@ -206,6 +206,33 @@ def is_strictly_ahead(candidate: dict | None, baseline: dict | None) -> bool:
     if c_ts is not None and b_ts is not None and c_ts != b_ts:
         return c_ts > b_ts
     return c_id > b_id
+
+
+def may_put_local_window(local: dict | None, remote: dict | None) -> tuple[bool, str]:
+    """Admin PUT local ballot onto Worker only if same windowId or local is strictly ahead.
+
+    If Worker Cron already rotated past git tracking/ballot-window.json, skip PUT so
+    live Hub opensAt / closesAt / windowId are never rolled back.
+    """
+    local_id = str((local or {}).get("windowId") or "").strip()
+    remote_id = str((remote or {}).get("windowId") or "").strip()
+    if not remote_id:
+        return False, "no live Worker window; skip PUT (will not guess Hub clock)"
+    if local_id and local_id == remote_id:
+        return True, f"same windowId as live ({local_id}); PUT candidates"
+    if is_strictly_ahead(local, remote):
+        return True, (
+            f"git window strictly ahead of Worker ({local_id} vs {remote_id}); PUT to heal"
+        )
+    if is_strictly_ahead(remote, local):
+        return False, (
+            f"Worker Cron is strictly ahead ({remote.get('windowId')} opens "
+            f"{remote.get('opensAt')}; git JSON still {local.get('windowId')}); "
+            "skip PUT so live Hub opensAt/closesAt/windowId stay"
+        )
+    return False, (
+        f"git window {local_id or '?'} is not same or ahead of live {remote_id}; skip PUT"
+    )
 
 
 def fetch_worker_json(base: str, path: str) -> dict[str, Any] | None:
@@ -745,8 +772,8 @@ def run_ingest_only(*, dry_run: bool, replace_candidates: bool) -> int:
     """Refresh current ballot-window.json candidates from slim JSON; do not settle.
 
     Default is merge-by-id (keep existing open candidates absent from this slim page).
-    If rotate-config has voteWindowMinutes, stamp it and PUT the same opens/closes
-    (10-minute span is applied when Cron/settle opens the next window).
+    Admin PUT only when git window is the same as live or strictly ahead.
+    If Worker Cron already rotated ahead, skip PUT (never roll back Hub clock).
     """
     cfg = load_json(CONFIG_PATH) if CONFIG_PATH.exists() else {}
     ballot = load_json(BALLOT_PATH)
@@ -782,8 +809,11 @@ def run_ingest_only(*, dry_run: bool, replace_candidates: bool) -> int:
         has_more=result.has_more,
         merged=not replace_candidates,
     )
-    if cfg.get("voteWindowMinutes"):
+    if cfg.get("voteWindowMinutes") is not None and str(cfg.get("voteWindowMinutes")).strip() != "":
         ballot["voteWindowMinutes"] = vote_window_minutes(cfg)
+    base = vote_api_base(cfg)
+    remote_window = fetch_worker_window(base)
+    put_ok, put_reason = may_put_local_window(ballot, remote_window)
     summary = {
         "action": "ingest_only",
         "windowId": ballot.get("windowId"),
@@ -796,15 +826,23 @@ def run_ingest_only(*, dry_run: bool, replace_candidates: bool) -> int:
         "candidateCount": len(candidates),
         "candidateIds": [c.get("id") for c in candidates],
         "incomingIds": [c.get("id") for c in result.incoming],
+        "putWindow": put_ok,
+        "putReason": put_reason,
     }
     print(json.dumps(summary, ensure_ascii=False, indent=2))
     if dry_run:
-        print("dry-run: would update tracking/ballot-window.json candidates + ingestNoteZh")
+        print(
+            "dry-run: would update tracking/ballot-window.json candidates + ingestNoteZh"
+            + ("; would PUT /api/window" if put_ok else f"; would skip PUT ({put_reason})")
+        )
         return 0
     ballot["candidates"] = candidates
     ballot["ingestNoteZh"] = note
     dump_json(BALLOT_PATH, ballot)
-    put_window(vote_api_base(cfg), os.environ.get("BALLOT_ADMIN_TOKEN", "").strip(), ballot)
+    if put_ok:
+        put_window(base, os.environ.get("BALLOT_ADMIN_TOKEN", "").strip(), ballot)
+    else:
+        print(f"ingest-only: skip PUT /api/window — {put_reason}", file=sys.stderr)
     return 0
 
 
@@ -1001,6 +1039,34 @@ def self_test() -> int:
     )
     assert maybe_commit_push("x", no_git=True, no_push=False, dry_run=False) == "no_git"
     assert maybe_commit_push("x", no_git=False, no_push=False, dry_run=True) == "dry_run"
+
+    git_w = {
+        "windowId": "2026-09-16-0800",
+        "opensAt": "2026-09-16T00:00:00.000Z",
+        "closesAt": "2026-09-16T00:10:00.000Z",
+    }
+    live_same = {
+        "windowId": "2026-09-16-0800",
+        "opensAt": "2026-09-16T00:00:00.000Z",
+        "closesAt": "2026-09-16T00:10:00.000Z",
+    }
+    live_ahead = {
+        "windowId": "2026-09-16-0810",
+        "opensAt": "2026-09-16T00:10:00.000Z",
+        "closesAt": "2026-09-16T00:20:00.000Z",
+    }
+    ok, reason = may_put_local_window(git_w, live_same)
+    assert ok is True and "same windowId" in reason
+    skip, reason = may_put_local_window(git_w, live_ahead)
+    assert skip is False and "strictly ahead" in reason and "skip PUT" in reason
+    heal, reason = may_put_local_window(live_ahead, git_w)
+    assert heal is True and "strictly ahead" in reason
+    none_ok, reason = may_put_local_window(git_w, None)
+    assert none_ok is False and "no live" in reason
+    assert vote_window_minutes({"voteWindowMinutes": "nope", "periodHours": 8}) == 8 * 60
+    assert vote_window_minutes({"voteWindowMinutes": "", "periodHours": 2}) == 2 * 60
+    assert vote_window_minutes({"voteWindowMinutes": -3, "periodHours": 8}) == 8 * 60
+    assert vote_window_minutes({"voteWindowMinutes": 10}) == 10
 
     cfg10 = {**cfg, "voteWindowMinutes": 10}
     now10 = parse_iso("2026-09-16T00:03:00.000Z")  # 08:03 Shanghai

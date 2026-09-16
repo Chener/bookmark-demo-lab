@@ -1,7 +1,8 @@
 /**
  * Slim ballot rotate for Cloudflare Workers Cron Triggers.
- * Primary window is voteWindowMinutes (default 10). 8h slots are legacy.
- * Window math matches scripts/rotate-beat.py. No git, X, agy, or demo builds.
+ * Window length comes from fetched rotate-config voteWindowMinutes; if that
+ * field is missing, duration is periodHours (cold/legacy, default 8h).
+ * Windows are floor-aligned in timezone by that duration. No git, X, agy, or demo builds.
  */
 
 export const CRON_UTC = "*/1 * * * *";
@@ -18,8 +19,6 @@ export function kvTtl(seconds) {
 
 const DEFAULT_TZ = "Asia/Shanghai";
 const DEFAULT_PERIOD = 8;
-const DEFAULT_VOTE_MINUTES = 10;
-const DEFAULT_SLOTS = [0, 8, 16];
 
 export function isoZ(ms) {
   const d = new Date(ms);
@@ -48,24 +47,6 @@ export function voteWindowMinutes(cfg) {
   const n = Number(cfg && cfg.voteWindowMinutes);
   if (Number.isFinite(n) && n > 0) return Math.floor(n);
   return periodHours(cfg) * 60;
-}
-
-export function slotHours(cfg) {
-  const slots = cfg && cfg.slotHours;
-  if (Array.isArray(slots) && slots.length) {
-    const uniq = [];
-    slots.forEach(function (h) {
-      const n = Number(h) % 24;
-      const v = n < 0 ? n + 24 : n;
-      if (uniq.indexOf(v) === -1) uniq.push(v);
-    });
-    uniq.sort(function (a, b) { return a - b; });
-    return uniq;
-  }
-  const period = periodHours(cfg);
-  const out = [];
-  for (let h = 0; h < 24; h += period) out.push(h);
-  return out;
 }
 
 export function timezone(cfg) {
@@ -301,8 +282,7 @@ export function defaultConfig() {
   // Deploy Pages rotate-config (voteWindowMinutes: 10) before or with Worker redeploy.
   return {
     timezone: DEFAULT_TZ,
-    periodHours: DEFAULT_PERIOD,
-    slotHours: DEFAULT_SLOTS.slice()
+    periodHours: DEFAULT_PERIOD
   };
 }
 

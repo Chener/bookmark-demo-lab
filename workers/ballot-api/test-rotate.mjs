@@ -240,6 +240,7 @@ test("defaultConfig stays legacy periodHours until rotate-config is fetched", ()
   const cold = defaultConfig();
   assert.equal(cold.periodHours, 8);
   assert.equal(cold.voteWindowMinutes, undefined);
+  assert.equal(cold.slotHours, undefined);
   assert.equal(voteWindowMinutes(cold), 8 * 60);
   const boot = bootstrapBallot(parseIso("2026-09-16T00:03:00.000Z"), cold, {});
   assert.equal(boot.closesAt, "2026-09-16T08:00:00.000Z");

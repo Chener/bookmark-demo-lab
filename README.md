@@ -24,7 +24,7 @@ index.html                        # 枢纽：卡片 + 待投票 + 军火库 + �
 
 ## 10 分钟投票轮转（上海）
 
-Captain 产品节拍默认 **Asia/Shanghai、`voteWindowMinutes=10`**：`closesAt = opensAt + 10 分钟`。Worker Cron **每分钟**（UTC `*/1 * * * *`）结算刚关闭的窗。旧的 **8 小时整点窗**（`periodHours=8`、`slotHours` 00/08/16、cron `0 0,8,16 * * *`）只作为遗留字段保留，**不再是主叙事**。
+Captain 产品节拍默认 **Asia/Shanghai、`voteWindowMinutes=10`**（写在 `tracking/rotate-config.json`）：`closesAt = opensAt + 10 分钟`。窗在时区内按该时长 **向下取整对齐**（不再读 `slotHours`）。Worker Cron **每分钟**（UTC `*/1 * * * *`）结算刚关闭的窗。旧的 **8 小时整点窗**（`periodHours=8`、cron `0 0,8,16 * * *`）只作为遗留字段保留，**不再是主叙事**。
 
 每个 beat：
 
@@ -36,9 +36,9 @@ Captain 产品节拍默认 **Asia/Shanghai、`voteWindowMinutes=10`**：`closesA
 | 字段 | 说明 |
 | --- | --- |
 | `timezone` | `Asia/Shanghai` |
-| `voteWindowMinutes` | **主字段**，默认 `10`；`closesAt` 以此为准 |
-| `periodHours` | 遗留；无 `voteWindowMinutes` 时 Worker/python 用 `periodHours * 60` 分钟 |
-| `slotHours` | 遗留 8h 整点列表；10 分钟窗按上海时钟对齐（00/10/20/…） |
+| `voteWindowMinutes` | **主字段**（rotate-config 提供）；`closesAt` 以此为准。Worker 冷启动未拉到配置时**不用** 10 分钟，而用 `periodHours` |
+| `periodHours` | 遗留；无有效 `voteWindowMinutes` 时 Worker/python 用 `periodHours * 60` 分钟 |
+| `slotHours` | 遗留、**不再参与开窗**。窗按上海时钟对 `voteWindowMinutes`（或 `periodHours*60`）向下取整对齐 |
 | `voteApiBase` | Vote Worker 根 URL，如 `https://ballot-api.<account>.workers.dev`。空字符串表示走同源 `/api/vote`（需在 **现有** Pages 主机绑路由） |
 
 ### 枢纽投票 UX

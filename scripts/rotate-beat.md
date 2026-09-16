@@ -26,7 +26,7 @@ Worker Cron 只做：KV 读计票 → 结算上一窗 → 打开下一窗写入 
 2. 读 KV `current-window`（没有则 fetch `ballot-window.json`）
 3. 窗未关则跳过
 4. 读 KV `tally:{windowId}` 结算 `winningStack`（真实零票 → `autoPick=true`；缺 tally 当零票）
-5. 打开下一上海窗（`closesAt = opensAt + voteWindowMinutes`；10 分钟窗 `windowId` 为 `YYYY-MM-DD-HHMM`），写入 KV `current-window` / `window-meta:` / `vote-ledger`
+5. 打开下一上海窗（`closesAt = opensAt + voteWindowMinutes`；按时长在时区向下取整对齐，10 分钟窗 `windowId` 为 `YYYY-MM-DD-HHMM`），写入 KV `current-window` / `window-meta:` / `vote-ledger`
 6. 置 `rotate-status.needsGitPush=true`、`needsXIngest=true` 给后续 harness（后续 skip 不会清掉）
 
 **部署顺序：** Pages 先（或同时）提供 `voteWindowMinutes: 10` 的 rotate-config，再 redeploy Worker。冷启动拉不到配置时不偷偷按 10 分钟 bootstrap。
@@ -64,7 +64,7 @@ Firstmate 建议每 **5–15 分钟** 轮询 MCP 书签（按页计费）。不�
 - slim 文件存在但 JSON 解析失败 → 中止；`ingestNoteZh` 写「读取/解析失败」，不写「无未见 id」
 - `--ingest-only` 的 `ingestNoteZh` 按 **本页 incoming** 计数，不是合并后总数
 
-窗未关时只刷新当前 `tracking/ballot-window.json` 的候选（不 settle）。若 rotate-config 含 `voteWindowMinutes`，会盖到 JSON 上并 `PUT /api/window`（**不改**当前 `opensAt`/`closesAt`；10 分钟跨度在下次 Cron/settle 开窗时生效）：
+窗未关时只刷新当前 `tracking/ballot-window.json` 的候选（不 settle）。`PUT /api/window` **有门闸**：仅当 git 窗与 live **同一 windowId**，或 git **严格超前** Worker 时才 PUT；若 Worker Cron 已转到更新的窗，**跳过 PUT**（明确打日志），绝不回滚 live Hub 的 `opensAt` / `closesAt` / `windowId`。拉不到 live 窗也不 PUT。
 
 ```bash
 python3 scripts/rotate-beat.py --ingest-only

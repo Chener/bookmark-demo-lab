@@ -10,10 +10,10 @@
   ],
   "voteApiBase": "https://ballot-api.chenhuitf2.workers.dev",
   "notesZh": [
-    "主叙事：voteWindowMinutes=10，closesAt = opensAt + 10 分钟。近实时投票窗；Worker Cron 每分钟（UTC */1 * * * *）结算刚关闭的窗并打开下一窗。8h 整点窗（periodHours=8、slotHours 00/08/16、cron 0 0,8,16 * * *）已降级为遗留字段，不再作为主路径。",
-    "时区仍是 Asia/Shanghai。periodHours / slotHours 可留作兼容；closesAt 以 voteWindowMinutes 为准。",
+    "主叙事：voteWindowMinutes=10，closesAt = opensAt + 10 分钟（按时长在 Asia/Shanghai 向下取整对齐）。Worker Cron 每分钟（UTC */1 * * * *）结算刚关闭的窗并打开下一窗。8h 整点窗与 slotHours 已降级为遗留字段，开窗不再读取 slotHours。",
+    "时区仍是 Asia/Shanghai。periodHours 可留作兼容（无有效 voteWindowMinutes 时用 periodHours*60）；closesAt 以 voteWindowMinutes 为准。",
     "主调度是 Cloudflare Workers Cron Triggers，不是本机 crontab，也不是 Grok Bot。Worker 只写 KV；不抓 X。书签增量主线是 Firstmate 自有 X MCP slim ingest（X_BOOKMARKS_SLIM_PATH / tracking/inbox），不要再配 X_BEARER_TOKEN。",
-    "Firstmate 建议每 5–15 分钟轮询 MCP 书签（按页计费，勿为填窗伪造条目）。python rotate-beat.py --ingest-only 按 id 合并 slim（has_more 拒绝整表替换）；10 分钟跨度在 Cron/settle 开下一窗时生效。空候选隐藏投票 UI 在 hub/v2-ui-realtime，不在本配置所在 Worker 分支。",
+    "Firstmate 建议每 5–15 分钟轮询 MCP 书签（按页计费，勿为填窗伪造条目）。python rotate-beat.py --ingest-only 按 id 合并 slim（has_more 拒绝整表替换）。PUT /api/window 仅当 git 窗与 live 同一 windowId 或 git 严格超前；Worker 已转新窗则跳过 PUT，不回滚 Hub。空候选隐藏投票 UI 在 hub/v2-ui-realtime。",
     "部署顺序：先让 Pages 提供本文件（含 voteWindowMinutes:10），再或同时 npx wrangler deploy 同一 ballot-api。Worker 冷启动无配置时仍用 periodHours=8，不偷偷 10 分钟 bootstrap。",
     "静态 Pages 无法按 IP 可靠去重。投票只走本仓库 workers/ballot-api（单 Worker + KV）。禁止用 GitHub Issue / 评论当票箱。禁止再开 Pages/Workers 项目、自定义域、CNAME、Workers Builds。",
     "候选项的燃料 / harness / 7×24 只能来自 arsenal.json 的 active 项；planned 不可投。",
