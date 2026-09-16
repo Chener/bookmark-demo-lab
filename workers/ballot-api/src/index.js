@@ -14,8 +14,8 @@
  * POST /api/rotate-status/ack  (admin; clear needsGitPush / needsXIngest)
  * POST /api/rotate         (admin; same slim settle/open as Cron)
  *
- * Scheduled: Cloudflare Workers Cron Triggers UTC every-1-min (see CRON_UTC)
- * so 10-minute vote windows are settled soon after closesAt.
+ * Scheduled: Cloudflare Workers Cron Triggers UTC every-10-min (see CRON_UTC)
+ * so 10-minute vote windows are settled near closesAt.
  * 8h UTC 0 0,8,16 * * * slots are deprecated as the primary narrative.
  * Not crontab. Not Grok Bot.
  */
@@ -28,7 +28,8 @@ import {
   ackRotateFlags,
   trackingUrls,
   fetchFirstJson,
-  kvTtl
+  kvTtl,
+  safeErrorDetail
 } from "./rotate.js";
 
 const RL_WINDOW_S = 60;
@@ -45,7 +46,11 @@ export default {
     try {
       return await handle(request, env);
     } catch (err) {
-      return json(env, request, { ok: false, error: "server_error" }, 500);
+      return json(env, request, {
+        ok: false,
+        error: "server_error",
+        detail: safeErrorDetail(err)
+      }, 500);
     }
   },
   async scheduled(controller, env) {

@@ -5,7 +5,7 @@
  * Windows are floor-aligned in timezone by that duration. No git, X, agy, or demo builds.
  */
 
-export const CRON_UTC = "*/1 * * * *";
+export const CRON_UTC = "*/10 * * * *";
 export const CONFIG_TTL_S = 60 * 60 * 24 * 7;
 export const LEDGER_TTL_S = 60 * 60 * 24 * 14;
 export const STATUS_TTL_S = 60 * 60 * 24 * 14;
@@ -15,6 +15,14 @@ export const LOCK_TTL_S = 60;
 
 export function kvTtl(seconds) {
   return Math.max(KV_MIN_TTL_S, Number(seconds) || 0);
+}
+
+/** KV / runtime error name only. Never echo messages (may contain secrets). */
+export function safeErrorDetail(err) {
+  if (err == null) return "unknown";
+  const name = String(err.name || "Error");
+  const cleaned = name.replace(/[^A-Za-z0-9._-]/g, "").slice(0, 80);
+  return cleaned || "Error";
 }
 
 const DEFAULT_TZ = "Asia/Shanghai";
@@ -458,7 +466,7 @@ export async function runRotate(env, opts) {
   try {
     const priorStatus = await kv.get("rotate-status", "json");
     priorFlags = harnessFlagsFrom(priorStatus);
-  } catch (_) {
+  } catch (err) {
     return {
       version: 1,
       at: started,
@@ -466,7 +474,8 @@ export async function runRotate(env, opts) {
       scheduledTime: isoZ(Number(options.scheduledTime) || nowMs),
       ok: false,
       action: "error",
-      error: "rotate_failed"
+      error: "rotate_failed",
+      detail: safeErrorDetail(err)
     };
   }
 
@@ -512,6 +521,14 @@ export async function runRotate(env, opts) {
 
       if (!current || !current.windowId) {
         const boot = bootstrapBallot(nowMs, cfg, stackOptions);
+        try {
+          await persistWindow(kv, boot);
+        } catch (err) {
+          return await fail("persist_failed", {
+            detail: safeErrorDetail(err),
+            nextWindowId: boot.windowId
+          });
+        }
         committed = {
           version: 1,
           at: started,
@@ -527,7 +544,6 @@ export async function runRotate(env, opts) {
           noteZh: "KV 无窗快照，已按 rotate-config 打开当前上海窗。请 harness 把 ballot-window 同步进 git；Worker 未抓 X。"
         };
         durablyMutated = true;
-        await persistWindow(kv, boot);
       } else {
         const closesMs = parseIso(current.closesAt);
         const opensMs = parseIso(current.opensAt);
@@ -536,7 +552,9 @@ export async function runRotate(env, opts) {
         }
 
         if (nowMs < closesMs && !force) {
-          const status = {
+          // Do not put rotate-status on skip: Cron */10 still ticks while the
+          // window is open; rewriting the same skip burned KV write quota.
+          return {
             version: 1,
             at: started,
             cron: cron,
@@ -550,8 +568,6 @@ export async function runRotate(env, opts) {
             needsXIngest: priorFlags.needsXIngest,
             noteZh: "当前窗仍未关闭，Worker Cron 跳过。needsGitPush / needsXIngest 沿用上次成功转窗，直至 harness POST /api/rotate-status/ack。"
           };
-          await writeStatus(status, true);
-          return status;
         }
 
         const tallies = (await kv.get("tally:" + current.windowId, "json")) || emptyTallies();
@@ -562,6 +578,26 @@ export async function runRotate(env, opts) {
         }, nowMs);
 
         const next = nextBallotSnapshot(nowMs, closesMs, current, cfg, stackOptions);
+        // persistWindow FIRST. Never report rotated if the next window did not land.
+        try {
+          await persistWindow(kv, next);
+        } catch (err) {
+          return await fail("persist_failed", {
+            detail: safeErrorDetail(err),
+            settledWindowId: current.windowId,
+            nextWindowId: next.windowId
+          });
+        }
+        try {
+          await putJson(kv, "vote-ledger", settled.ledger, LEDGER_TTL_S);
+        } catch (err) {
+          return await fail("ledger_failed", {
+            detail: safeErrorDetail(err),
+            settledWindowId: settled.ledger.settledWindowId,
+            nextWindowId: next.windowId,
+            noteZh: "下一窗已写入 KV，但 vote-ledger 写入失败。未报 rotated。勿在 Worker 内补跑 git / X / agy。"
+          });
+        }
         committed = {
           version: 1,
           at: started,
@@ -579,10 +615,8 @@ export async function runRotate(env, opts) {
             "Worker Cron 已在 KV 结算上一窗并打开下一窗。未跑 git / X / agy。harness 见 needsGitPush / needsXIngest；完成后 POST /api/rotate-status/ack。"
         };
         durablyMutated = true;
-        await putJson(kv, "vote-ledger", settled.ledger, LEDGER_TTL_S);
-        await persistWindow(kv, next);
       }
-    } catch (_) {
+    } catch (err) {
       if (durablyMutated) {
         const status = committed || {
           version: 1,
@@ -596,7 +630,7 @@ export async function runRotate(env, opts) {
         };
         return await writeCommittedStatus(status);
       }
-      return await fail("rotate_failed");
+      return await fail("rotate_failed", { detail: safeErrorDetail(err) });
     }
 
     if (committed) {
