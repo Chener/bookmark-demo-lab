@@ -387,11 +387,18 @@ export const PENDING_LEDGER_KEY = "pending-ledger";
 export const LEDGER_REPAIR_MAX_FAILURES = 5;
 
 export function pendingLedgerFrom(priorStatus, stored) {
-  if (priorStatus && priorStatus.pendingLedger && priorStatus.pendingLedger.settledWindowId) {
-    return priorStatus.pendingLedger;
-  }
-  if (stored && stored.settledWindowId) return stored;
-  return null;
+  const fromStatus = (priorStatus && priorStatus.pendingLedger && priorStatus.pendingLedger.settledWindowId)
+    ? priorStatus.pendingLedger
+    : null;
+  const fromKey = (stored && stored.settledWindowId) ? stored : null;
+  if (!fromStatus && !fromKey) return null;
+  if (!fromStatus) return fromKey;
+  if (!fromKey) return fromStatus;
+  // KEY wins identity fields; failCount is max so a stale lower status count
+  // cannot delay ledger_repair_exhausted.
+  const merged = Object.assign({}, fromStatus, fromKey);
+  merged.failCount = Math.max(Number(fromStatus.failCount) || 0, Number(fromKey.failCount) || 0);
+  return merged;
 }
 
 export function compactPendingBallot(ballot) {
@@ -468,17 +475,19 @@ export async function runRotate(env, opts) {
     }, extra || {});
     if (dropPending) {
       delete status.pendingLedger;
-    } else if (!(status.pendingLedger && status.pendingLedger.settledWindowId)) {
-      if (priorStatus && priorStatus.pendingLedger && priorStatus.pendingLedger.settledWindowId) {
-        status.pendingLedger = priorStatus.pendingLedger;
-      } else {
-        try {
-          const stored = await kv.get(PENDING_LEDGER_KEY, "json");
-          if (stored && stored.settledWindowId) status.pendingLedger = stored;
-        } catch (_) {
-          /* keep whatever extra provided */
-        }
+    } else {
+      let storedPending = null;
+      try {
+        storedPending = await kv.get(PENDING_LEDGER_KEY, "json");
+      } catch (_) {
+        storedPending = null;
       }
+      const merged = pendingLedgerFrom({
+        pendingLedger: (status.pendingLedger && status.pendingLedger.settledWindowId)
+          ? status.pendingLedger
+          : (priorStatus && priorStatus.pendingLedger)
+      }, storedPending);
+      if (merged) status.pendingLedger = merged;
     }
     if (status.pendingLedger && status.pendingLedger.settledWindowId) {
       try {
@@ -580,8 +589,15 @@ export async function runRotate(env, opts) {
       };
 
       const failLedger = async function (err, pending) {
-        const failCount = (Number(pending.failCount) || 0) + 1;
-        const nextPending = Object.assign({}, pending, { failCount: failCount });
+        let stored = null;
+        try {
+          stored = await kv.get(PENDING_LEDGER_KEY, "json");
+        } catch (_) {
+          stored = null;
+        }
+        const base = pendingLedgerFrom({ pendingLedger: pending }, stored) || pending;
+        const failCount = (Number(base.failCount) || 0) + 1;
+        const nextPending = Object.assign({}, base, { failCount: failCount });
         if (failCount >= LEDGER_REPAIR_MAX_FAILURES) {
           try {
             await kv.delete(PENDING_LEDGER_KEY);
@@ -797,8 +813,27 @@ export async function runRotate(env, opts) {
         const pendingMarker = {
           settledWindowId: settled.ledger.settledWindowId,
           nextWindowId: next.windowId,
-          ballot: compactPendingBallot(current)
+          ballot: compactPendingBallot(current),
+          failCount: 0
         };
+        // Crash-safe: pending must land before vote-ledger so a thrown put
+        // cannot orphan the settlement (re-repair is idempotent).
+        try {
+          await putJson(kv, PENDING_LEDGER_KEY, pendingMarker, STATUS_TTL_S);
+        } catch (_) {
+          /* failLedger still retries the marker */
+        }
+        try {
+          const optimistic = Object.assign({}, priorStatus || {}, {
+            pendingLedger: pendingMarker,
+            needsGitPush: true,
+            needsXIngest: true
+          });
+          await putJson(kv, "rotate-status", optimistic, STATUS_TTL_S);
+          priorStatus = optimistic;
+        } catch (_) {
+          /* KEY is the backup if status put fails */
+        }
         try {
           await putJson(kv, "vote-ledger", settled.ledger, LEDGER_TTL_S);
         } catch (err) {
