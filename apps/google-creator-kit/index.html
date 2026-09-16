@@ -1,0 +1,162 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta name="theme-color" content="#f4efe4" />
+  <title>Google 创作者工具箱 — bookmark-demo-lab</title>
+  <meta name="description" content="静态致敬：把 GeekCatX 原帖点名的 7 个动作钉在一张工位上。Flow 批量做图、NotebookLM 做 PPT、视频反推分镜。纯前端，无密钥。" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@400;600;700&family=Noto+Sans+SC:wght@400;500;700;900&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <div class="desk" aria-hidden="true">
+    <div class="paper-grain"></div>
+    <div class="tape tape-a"></div>
+    <div class="tape tape-b"></div>
+  </div>
+
+  <header class="nav">
+    <a class="hub" href="/">← 实验室</a>
+    <p class="brand">
+      <span class="dots" aria-hidden="true"><i></i><i></i><i></i><i></i></span>
+      Google 创作者工具箱
+    </p>
+    <a class="source" href="https://x.com/GeekCatX/status/2099920497383440599" target="_blank" rel="noopener noreferrer">原帖 @GeekCatX</a>
+  </header>
+
+  <main>
+    <section class="hero">
+      <p class="kicker">静态致敬 · 预算有限的内容工位</p>
+      <h1>非常香的七个图钉</h1>
+      <p class="lede">
+        原帖把 Google 这套工具整理成 7 种用法：Flow 配合插件批量做图，NotebookLM 拿现成资料做 PPT，并最推荐先练视频反推。
+        这里不复述未公开长文，只把<strong>帖子里点名的动作</strong>做成可点的工位。
+      </p>
+      <div class="hero-actions">
+        <a class="btn primary" href="#bench">打开工位</a>
+        <button class="btn ghost" type="button" data-recommend>先练视频反推</button>
+      </div>
+      <blockquote class="quote">
+        <p>手里有 Pro 的，可以拿一条喜欢的视频，跟着文章拆一次分镜，试着做一条自己的短片。</p>
+        <cite>@GeekCatX · 知识猫AI实验室</cite>
+      </blockquote>
+    </section>
+
+    <section class="kit" id="kit" aria-label="七种用法">
+      <div class="kit-head">
+        <h2>七张便签</h2>
+        <p>点一张钉上工位。第 5 张是作者最推荐的入口。</p>
+      </div>
+      <div class="cards" data-cards></div>
+    </section>
+
+    <section class="bench" id="bench" aria-label="工位演练场">
+      <div class="bench-bar">
+        <p class="path"><code>apps/google-creator-kit</code></p>
+        <p class="pin-label" data-pin-label>当前图钉：视频反推</p>
+        <p class="credits" aria-label="演示额度">Pro 演示额度 <b data-credits>1000</b></p>
+      </div>
+
+      <div class="stage">
+        <article class="panel" data-pane="codex">
+          <header>
+            <span class="badge">01–02</span>
+            <h3>Pro 接到 Codex · Skill 换 Gemini 跑</h3>
+          </header>
+          <p class="hint">原帖说挑了几个 Google Pro 接进 Codex；以前做视频的 Skill，换 Gemini 也顺。下面是工位示意，不是账号教程。</p>
+          <div class="pipe">
+            <button type="button" class="chip is-on" data-node="pro">Google Pro</button>
+            <span class="arrow" aria-hidden="true">→</span>
+            <button type="button" class="chip" data-node="codex">Codex</button>
+            <span class="arrow" aria-hidden="true">→</span>
+            <button type="button" class="chip" data-node="gemini">Gemini Skill</button>
+          </div>
+          <p class="node-copy" data-node-copy>把 Pro 额度当成燃料。点一下节点，看这条链路怎么走。</p>
+        </article>
+
+        <article class="panel" data-pane="flow">
+          <header>
+            <span class="badge">03</span>
+            <h3>Flow 工位 · 插件批量做图</h3>
+          </header>
+          <div class="plugins" role="group" aria-label="Flow 插件">
+            <button type="button" class="plug is-on" data-plugin="style">风格锁</button>
+            <button type="button" class="plug is-on" data-plugin="batch">四宫格</button>
+            <button type="button" class="plug" data-plugin="cast">角色一致</button>
+            <button type="button" class="plug" data-plugin="wide">16:9 画幅</button>
+          </div>
+          <label class="prompt-label" for="flow-prompt">画面提示</label>
+          <div class="prompt-row">
+            <input id="flow-prompt" type="text" maxlength="80" value="夜市灯牌、湿润地面反光、手持胶片感" />
+            <button class="btn primary" type="button" data-flow-go>批量出图</button>
+          </div>
+          <div class="polaroids" data-polaroids aria-live="polite"></div>
+        </article>
+
+        <article class="panel" data-pane="notebook">
+          <header>
+            <span class="badge">04</span>
+            <h3>NotebookLM 工位 · 现成资料做 PPT</h3>
+          </header>
+          <p class="hint">资料来自这条书签本身，不另编长文。</p>
+          <div class="sources" role="group" aria-label="资料来源">
+            <button type="button" class="src is-on" data-source="post">原帖手记</button>
+            <button type="button" class="src is-on" data-source="flow">Flow 批量</button>
+            <button type="button" class="src is-on" data-source="ppt">NotebookLM</button>
+            <button type="button" class="src" data-source="reverse">视频反推</button>
+          </div>
+          <button class="btn primary" type="button" data-ppt-go>生成简报</button>
+          <div class="deck" data-deck hidden>
+            <button class="nav-btn" type="button" data-ppt-prev aria-label="上一页">‹</button>
+            <div class="slide" data-slide></div>
+            <button class="nav-btn" type="button" data-ppt-next aria-label="下一页">›</button>
+          </div>
+          <p class="slide-count" data-ppt-count hidden></p>
+        </article>
+
+        <article class="panel" data-pane="reverse">
+          <header>
+            <span class="badge">05–07</span>
+            <h3>视频反推 · 拆分镜 · 试做短片</h3>
+          </header>
+          <p class="hint">选一条「喜欢的视频」示意片，反推成六格分镜，再串成一条静态短片。素材是工位虚构的，不是原帖附件。</p>
+          <div class="picks" role="listbox" aria-label="喜欢的视频">
+            <button type="button" class="pick is-on" data-clip="night">夜市灯牌</button>
+            <button type="button" class="pick" data-clip="pour">手冲咖啡</button>
+            <button type="button" class="pick" data-clip="rain">城市雨巷</button>
+          </div>
+          <div class="reverse-actions">
+            <button class="btn primary" type="button" data-reverse-go>反推分镜</button>
+            <button class="btn ghost" type="button" data-short-go>试做短片</button>
+          </div>
+          <ol class="board" data-storyboard></ol>
+          <div class="film" data-film hidden>
+            <div class="film-frame" data-film-frame></div>
+            <p class="film-cap" data-film-cap></p>
+          </div>
+        </article>
+      </div>
+    </section>
+
+    <section class="note">
+      <h2>这页能做什么、不能做什么</h2>
+      <ul>
+        <li>纯静态 HTML / CSS / JS，没有构建步骤，也没有密钥或接口。</li>
+        <li>7 张便签对齐原帖点名的动作，不冒充未公开文章目录。</li>
+        <li>Flow / NotebookLM / 反推都是工位模拟：出图是画布色块，PPT 来自书签原文。</li>
+      </ul>
+    </section>
+  </main>
+
+  <footer class="foot">
+    <a href="/">← 返回书签演示实验室</a>
+    <a href="https://x.com/GeekCatX/status/2099920497383440599" target="_blank" rel="noopener noreferrer">来源收藏 · GeekCatX</a>
+    <span>apps/google-creator-kit</span>
+  </footer>
+
+  <script src="app.js"></script>
+</body>
+</html>

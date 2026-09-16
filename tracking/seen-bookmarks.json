@@ -2,6 +2,23 @@
   "version": 1,
   "items": [
     {
+      "id": "2099920497383440599",
+      "url": "https://x.com/GeekCatX/status/2099920497383440599",
+      "slug": "google-creator-kit",
+      "title": "Google creator kit — 7 usages for budget creators",
+      "titleZh": "Google 创作者工具箱：7 种用法工位",
+      "hubTitle": "Google 创作者工具箱",
+      "blurbZh": "Flow 批量做图、NotebookLM 做 PPT，预算有限也能很香。",
+      "rationaleZh": "原帖把 Flow 做图、NotebookLM 做 PPT 和视频反推收成预算创作者的 7 种用法，适合钉成一张可点工位。",
+      "author": "GeekCatX",
+      "processedAt": "2026-09-16T05:55:00.000Z",
+      "path": "/apps/google-creator-kit/",
+      "subscriptionZh": "Google AI Pro",
+      "modelZh": "grok-4.6",
+      "harnessZh": "Cursor Cloud Agent",
+      "environmentZh": "Cursor Cloud Agent 托管机"
+    },
+    {
       "id": "2099440427841597573",
       "url": "https://x.com/BTCqzy1/status/2099440427841597573",
       "slug": "gsap-canvas",
