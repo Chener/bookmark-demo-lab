@@ -152,6 +152,15 @@ h1 {
   border-color: var(--line);
   color: var(--ink);
 }
+.bench .btn.primary {
+  background: #eef1ff;
+  color: var(--bench);
+}
+.bench .btn.primary:hover { background: #fffdf7; }
+.bench .btn.ghost {
+  border-color: rgba(142, 176, 255, 0.32);
+  color: #eef1ff;
+}
 .quote {
   margin: 0;
   max-width: 40rem;
