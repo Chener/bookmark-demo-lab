@@ -1,10 +1,10 @@
 {
   "version": 1,
-  "windowId": "2026-09-15-16",
+  "windowId": "2026-09-16-08",
   "timezone": "Asia/Shanghai",
   "periodHours": 8,
-  "opensAt": "2026-09-15T08:00:00.000Z",
-  "closesAt": "2026-09-15T16:00:00.000Z",
+  "opensAt": "2026-09-16T00:00:00.000Z",
+  "closesAt": "2026-09-16T08:00:00.000Z",
   "candidates": [],
   "options": {
     "fuel": [
@@ -24,5 +24,5 @@
       "自购 VPS / 便宜 KVM"
     ]
   },
-  "ingestNoteZh": "本窗无新书签增量：尚未配置 X 凭证，cron 不会伪造书签。候选名单为空时仍可投燃料 / harness / 7×24。"
+  "ingestNoteZh": "本窗无新书签增量：Worker Cron 不抓 X。X ingest 由 harness（rotate-beat + X_BEARER_TOKEN / X_BOOKMARKS_USER_ID）处理；未实现或无凭证时 candidates=[]，绝不伪造。仍可投燃料 / harness / 7×24。"
 }
