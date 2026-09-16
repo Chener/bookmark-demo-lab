@@ -3,2514 +3,1431 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>书签演示实验室 · Hub v2</title>
-  <meta name="description" content="从 X 书签出发的自动化静态技术演示枢纽。短窗轮转、技术栈竞投、一键直达演示与原帖。" />
-  <link rel="preconnect" href="https://fonts.googleapis.com" />
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600;700&family=Noto+Sans+SC:wght@400;500;700;900&display=swap" rel="stylesheet" />
+  <title>书签演示实验室 · bookmark-demo-lab</title>
+  <meta name="description" content="从 X 书签出发的静态技术演示枢纽。按最新倒序浏览，一键打开演示或原帖。" />
   <style>
     :root {
-      --bg: #06080e;
-      --bg-surface: rgba(14, 20, 36, 0.72);
-      --bg-surface-elevated: rgba(20, 29, 52, 0.85);
-      --bg-hover: rgba(30, 44, 78, 0.6);
-      --ink: #f8fafc;
-      --ink-muted: #94a3b8;
-      --ink-faint: #64748b;
-      --border: rgba(142, 176, 255, 0.12);
-      --border-hover: rgba(56, 189, 248, 0.38);
-      --border-strong: rgba(142, 176, 255, 0.35);
-      
-      --cyan: #38bdf8;
-      --cyan-glow: rgba(56, 189, 248, 0.25);
-      --emerald: #10b981;
-      --emerald-glow: rgba(16, 185, 129, 0.25);
-      --amber: #f59e0b;
-      --amber-glow: rgba(245, 158, 11, 0.25);
-      --purple: #a855f7;
-      --purple-glow: rgba(168, 85, 247, 0.25);
-      --rose: #f43f5e;
-      
-      --radius-sm: 8px;
-      --radius-md: 12px;
-      --radius-lg: 18px;
-      --radius-pill: 9999px;
-      
-      --sans: "Inter", "Noto Sans SC", "PingFang SC", system-ui, sans-serif;
-      --mono: "JetBrains Mono", ui-monospace, Menlo, Consolas, monospace;
+      --bg: #080b14;
+      --ink: #e8edff;
+      --muted: #8b97c4;
+      --faint: #5e6b94;
+      --card: rgba(16, 22, 42, 0.78);
+      --line: rgba(142, 176, 255, 0.16);
+      --line-strong: rgba(142, 176, 255, 0.38);
+      --accent: #8eb0ff;
+      --radius: 14px;
+      --sans: "PingFang SC", "Hiragino Sans GB", "Noto Sans SC", "Microsoft YaHei", system-ui, sans-serif;
+      --mono: ui-monospace, "SFMono-Regular", "JetBrains Mono", Menlo, Consolas, monospace;
     }
-
     * { box-sizing: border-box; }
-    html, body {
-      margin: 0;
-      padding: 0;
-      min-height: 100%;
-      background: var(--bg);
-      color: var(--ink);
+    html, body { margin: 0; min-height: 100%; }
+    body {
       font-family: var(--sans);
-      line-height: 1.5;
-      -webkit-font-smoothing: antialiased;
-      overflow-x: hidden;
+      color: var(--ink);
+      background: var(--bg);
+      line-height: 1.45;
     }
-
-    /* 背景粒子 Canvas 与全局光晕 */
-    #bg-canvas {
+    body::before {
+      content: "";
       position: fixed;
       inset: 0;
-      width: 100vw;
-      height: 100vh;
-      pointer-events: none;
       z-index: 0;
-    }
-    .ambient-glow {
-      position: fixed;
-      inset: 0;
       pointer-events: none;
-      z-index: 0;
       background:
-        radial-gradient(circle 800px at 10% -10%, rgba(56, 189, 248, 0.12), transparent 70%),
-        radial-gradient(circle 600px at 90% 10%, rgba(168, 85, 247, 0.1), transparent 60%),
-        radial-gradient(circle 700px at 50% 110%, rgba(16, 185, 129, 0.08), transparent 60%);
+        radial-gradient(ellipse 70% 46% at 8% -8%, rgba(90, 130, 255, 0.16), transparent 55%),
+        radial-gradient(ellipse 46% 36% at 96% 0%, rgba(92, 64, 150, 0.12), transparent 48%),
+        radial-gradient(ellipse 50% 30% at 50% 110%, rgba(18, 50, 80, 0.22), transparent 55%);
     }
-    .grid-lines {
+    body::after {
+      content: "";
       position: fixed;
       inset: 0;
-      pointer-events: none;
       z-index: 0;
+      pointer-events: none;
       background-image:
-        linear-gradient(rgba(142, 176, 255, 0.03) 1px, transparent 1px),
-        linear-gradient(90deg, rgba(142, 176, 255, 0.03) 1px, transparent 1px);
-      background-size: 48px 48px;
-      mask-image: radial-gradient(ellipse 80% 80% at 50% 40%, #000 30%, transparent 80%);
+        linear-gradient(rgba(142, 176, 255, 0.035) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(142, 176, 255, 0.035) 1px, transparent 1px);
+      background-size: 52px 52px;
+      mask-image: linear-gradient(180deg, rgba(0, 0, 0, 0.4), transparent 72%);
     }
-
-    /* 页面骨架 */
-    .shell {
-      position: relative;
-      z-index: 1;
-      width: min(100% - 2.5rem, 1180px);
-      margin: 0 auto;
-      padding: 2.2rem 0 4rem;
+    .ballot-wrap {
+      margin: 0 0 1.25rem;
+      padding: 0.9rem 1rem 1rem;
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      background: var(--card);
     }
-
-    /* 顶部导航与品牌 */
-    .top-bar {
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      gap: 1.2rem;
-      padding-bottom: 1.8rem;
-      border-bottom: 1px solid var(--border);
-      margin-bottom: 2rem;
-    }
-    .brand {
-      display: flex;
-      align-items: center;
-      gap: 0.9rem;
-    }
-    .brand-icon {
-      width: 42px;
-      height: 42px;
-      border-radius: 12px;
-      background: linear-gradient(135deg, rgba(56, 189, 248, 0.2), rgba(168, 85, 247, 0.2));
-      border: 1px solid var(--border-strong);
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      box-shadow: 0 0 20px var(--cyan-glow);
-    }
-    .brand-icon svg { width: 22px; height: 22px; fill: none; stroke: var(--cyan); }
-    .brand-title {
-      font-size: 1.28rem;
-      font-weight: 800;
-      letter-spacing: -0.02em;
-      margin: 0;
-      display: flex;
-      align-items: center;
-      gap: 0.6rem;
-    }
-    .brand-tag {
-      font-family: var(--mono);
-      font-size: 0.7rem;
-      padding: 0.15rem 0.45rem;
-      border-radius: var(--radius-pill);
-      background: rgba(56, 189, 248, 0.12);
-      border: 1px solid rgba(56, 189, 248, 0.3);
-      color: var(--cyan);
-      font-weight: 600;
-      letter-spacing: 0.04em;
-    }
-    .brand-sub {
-      margin: 0.2rem 0 0;
-      font-size: 0.82rem;
-      color: var(--ink-muted);
-    }
-    .hud-telemetry {
-      display: flex;
-      align-items: center;
-      gap: 0.6rem;
-      flex-wrap: wrap;
-    }
-    .hud-pill {
-      font-family: var(--mono);
-      font-size: 0.72rem;
-      padding: 0.28rem 0.65rem;
-      border-radius: var(--radius-pill);
-      background: rgba(14, 20, 36, 0.7);
-      border: 1px solid var(--border);
-      color: var(--ink-muted);
+    .ballot-cand .origin {
+      position: static;
       display: inline-flex;
-      align-items: center;
+      margin-top: 0.28rem;
+    }
+    .ballot-wrap[hidden] { display: none; }
+    .ballot-header {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: flex-end;
+      justify-content: space-between;
+      gap: 0.4rem 1.2rem;
+      margin-bottom: 0.45rem;
+    }
+    .ballot-title {
+      margin: 0;
+      font-size: 1.05rem;
+      font-weight: 700;
+      letter-spacing: -0.02em;
+    }
+    .ballot-meta {
+      margin: 0;
+      color: var(--faint);
+      font-size: 0.76rem;
+      font-variant-numeric: tabular-nums;
+    }
+    .ballot-ingest {
+      margin: 0 0 0.7rem;
+      color: var(--muted);
+      font-size: 0.8rem;
+    }
+    .ballot-cands {
+      display: flex;
+      flex-direction: column;
       gap: 0.45rem;
-      backdrop-filter: blur(10px);
+      margin: 0 0 0.75rem;
     }
-    .hud-pill.live {
-      border-color: rgba(16, 185, 129, 0.3);
-      color: #34d399;
+    .ballot-cand {
+      display: grid;
+      grid-template-columns: auto 1fr;
+      gap: 0.45rem 0.6rem;
+      padding: 0.5rem 0.65rem;
+      border: 1px solid rgba(142, 176, 255, 0.1);
+      border-radius: 10px;
+      background: rgba(142, 176, 255, 0.03);
     }
-    .hud-pill .dot {
-      width: 6px;
-      height: 6px;
-      border-radius: 50%;
-      background: currentColor;
-      box-shadow: 0 0 8px currentColor;
+    .ballot-cand:hover { border-color: var(--line); }
+    .ballot-cand-title {
+      margin: 0;
+      font-size: 0.86rem;
+      font-weight: 600;
     }
-    .hud-pill .dot.pulse {
-      animation: pulse-dot 1.8s infinite;
+    .ballot-cand-author {
+      margin: 0;
+      font: 500 0.68rem/1.3 var(--mono);
+      color: var(--accent);
     }
-
-    @keyframes pulse-dot {
-      0%, 100% { opacity: 1; transform: scale(1); }
-      50% { opacity: 0.4; transform: scale(0.85); }
-    }
-
-    /* ===================================================
-       流水线状态条：开发前 → 开发中 → 开发后
-       =================================================== */
-    .pipeline-container {
-      margin-bottom: 2.4rem;
-      background: var(--bg-surface);
-      border: 1px solid var(--border);
-      border-radius: var(--radius-lg);
-      padding: 1.25rem 1.4rem;
-      backdrop-filter: blur(16px);
-      box-shadow: 0 10px 30px rgba(0, 0, 0, 0.35);
-      position: relative;
+    .ballot-plan {
+      margin: 0.15rem 0 0;
+      color: var(--muted);
+      font-size: 0.76rem;
+      line-height: 1.4;
+      display: -webkit-box;
+      -webkit-line-clamp: 3;
+      line-clamp: 3;
+      -webkit-box-orient: vertical;
       overflow: hidden;
     }
-    .pipeline-container::before {
-      content: "";
-      position: absolute;
-      top: 0;
-      left: 0;
-      right: 0;
-      height: 2px;
-      background: linear-gradient(90deg, var(--amber), var(--cyan), var(--emerald));
-      opacity: 0.8;
-    }
-    .pipeline-header {
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      margin-bottom: 1rem;
-      padding-bottom: 0.6rem;
-      border-bottom: 1px solid rgba(142, 176, 255, 0.08);
-    }
-    .pipeline-title {
-      font-size: 0.82rem;
-      font-weight: 700;
-      text-transform: uppercase;
-      letter-spacing: 0.08em;
-      color: var(--ink-muted);
-      display: flex;
-      align-items: center;
-      gap: 0.5rem;
-    }
-    .pipeline-title svg { width: 14px; height: 14px; stroke: var(--cyan); }
-    .pipeline-meta {
-      font-family: var(--mono);
-      font-size: 0.72rem;
-      color: var(--ink-faint);
-    }
-
-    .pipeline-strip {
+    .ballot-stack {
       display: grid;
-      grid-template-columns: 1fr auto 1.3fr auto 1fr;
-      gap: 0.8rem;
-      align-items: center;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 0.55rem;
+      margin-bottom: 0.7rem;
     }
-    .pipe-node {
-      background: rgba(10, 15, 28, 0.7);
-      border: 1px solid var(--border);
-      border-radius: var(--radius-md);
-      padding: 0.85rem 1rem;
-      transition: all 0.2s ease;
-      position: relative;
-    }
-    .pipe-node:hover {
-      border-color: var(--border-strong);
-      transform: translateY(-1px);
-    }
-    .pipe-node.is-active {
-      border-color: rgba(56, 189, 248, 0.4);
-      box-shadow: 0 0 20px rgba(56, 189, 248, 0.1);
-    }
-    .pipe-badge {
-      display: inline-flex;
-      align-items: center;
-      gap: 0.4rem;
-      font-family: var(--mono);
-      font-size: 0.68rem;
-      font-weight: 700;
-      text-transform: uppercase;
-      letter-spacing: 0.06em;
-      margin-bottom: 0.4rem;
-    }
-    .pipe-pre .pipe-badge { color: var(--amber); }
-    .pipe-mid .pipe-badge { color: var(--cyan); }
-    .pipe-post .pipe-badge { color: var(--emerald); }
-    .pipe-badge .pip-dot {
-      width: 6px;
-      height: 6px;
-      border-radius: 50%;
-      background: currentColor;
-    }
-    .pipe-name {
-      font-size: 0.95rem;
-      font-weight: 700;
-      color: var(--ink);
-      margin: 0 0 0.25rem;
-    }
-    .pipe-desc {
-      font-size: 0.75rem;
-      color: var(--ink-muted);
+    .ballot-col {
       margin: 0;
-      line-height: 1.4;
+      padding: 0;
+      border: 0;
+      min-width: 0;
     }
-    .pipe-stack-grid {
-      display: grid;
-      grid-template-columns: 1fr 1fr;
-      gap: 0.35rem 0.5rem;
-      margin-top: 0.35rem;
-    }
-    .pipe-stack-pill {
-      font-family: var(--mono);
-      font-size: 0.66rem;
-      padding: 0.18rem 0.4rem;
-      border-radius: 4px;
-      background: rgba(142, 176, 255, 0.05);
-      border: 1px solid rgba(142, 176, 255, 0.12);
+    .ballot-col legend {
+      padding: 0;
+      margin-bottom: 0.35rem;
+      font-size: 0.75rem;
+      font-weight: 600;
       color: var(--ink);
+    }
+    .ballot-choice {
+      display: flex;
+      align-items: flex-start;
+      gap: 0.38rem;
+      margin: 0 0 0.28rem;
+      font-size: 0.78rem;
+      color: var(--muted);
+      line-height: 1.3;
+    }
+    .ballot-choice input { margin-top: 0.15rem; accent-color: var(--accent); }
+    .ballot-actions {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: 0.55rem 0.8rem;
+    }
+    .ballot-submit {
+      height: 2.2rem;
+      padding: 0 0.95rem;
+      border-radius: 999px;
+      border: 1px solid var(--line-strong);
+      background: rgba(142, 176, 255, 0.12);
+      color: var(--ink);
+      font: 600 0.82rem/1 var(--sans);
+      cursor: pointer;
+    }
+    .ballot-submit:hover:not(:disabled) { background: rgba(142, 176, 255, 0.2); }
+    .ballot-submit:disabled {
+      opacity: 0.45;
+      cursor: not-allowed;
+    }
+    .ballot-hint, .ballot-status {
+      margin: 0;
+      color: var(--faint);
+      font-size: 0.75rem;
+    }
+    .ballot-status[data-kind="ok"] { color: #7ee7c9; }
+    .ballot-status[data-kind="err"] { color: #ffb4a2; }
+    .ballot-tallies {
+      margin-top: 0.75rem;
+      padding-top: 0.65rem;
+      border-top: 1px solid var(--line);
+    }
+    .ballot-tallies h3 {
+      margin: 0 0 0.4rem;
+      font-size: 0.78rem;
+      font-weight: 600;
+      color: var(--muted);
+    }
+    .tally-grid {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 0.45rem 0.8rem;
+      font-size: 0.74rem;
+      color: var(--muted);
+    }
+    .tally-row {
+      display: flex;
+      justify-content: space-between;
+      gap: 0.5rem;
+      font-variant-numeric: tabular-nums;
+    }
+    .tally-row b { font-weight: 600; color: var(--ink); }
+    .ballot-last {
+      margin: 0.45rem 0 0;
+      font-size: 0.74rem;
+      color: var(--faint);
+    }
+    @media (max-width: 720px) {
+      .ballot-stack, .tally-grid { grid-template-columns: 1fr; }
+    }
+    .wrap {
+      position: relative;
+      z-index: 1;
+      width: min(960px, calc(100% - 2rem));
+      margin: 0 auto;
+      padding: 2.4rem 0 3.5rem;
+    }
+    .top {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: flex-end;
+      justify-content: space-between;
+      gap: 1rem 1.5rem;
+      margin-bottom: 1.35rem;
+    }
+    .brand { min-width: min(100%, 16rem); }
+    .kicker {
+      margin: 0 0 0.35rem;
+      font: 600 0.7rem/1 var(--mono);
+      letter-spacing: 0.14em;
+      text-transform: uppercase;
+      color: var(--accent);
+    }
+    h1 {
+      margin: 0;
+      font-size: clamp(1.35rem, 2.4vw, 1.7rem);
+      letter-spacing: -0.03em;
+      font-weight: 700;
+    }
+    .lede {
+      margin: 0.4rem 0 0;
+      color: var(--muted);
+      font-size: 0.92rem;
+      max-width: 36rem;
+    }
+    .tools {
+      display: flex;
+      flex-direction: column;
+      align-items: flex-end;
+      gap: 0.4rem;
+      flex: 1 1 16rem;
+    }
+    label[for="filter"] {
+      position: absolute;
+      width: 1px;
+      height: 1px;
+      overflow: hidden;
+      clip: rect(0 0 0 0);
+    }
+    #filter {
+      width: min(100%, 18rem);
+      height: 2.4rem;
+      padding: 0 0.85rem 0 2.15rem;
+      border: 1px solid var(--line);
+      border-radius: 999px;
+      background:
+        var(--card)
+        url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' fill='none' stroke='%238b97c4' stroke-width='1.6'%3E%3Ccircle cx='7' cy='7' r='4.5'/%3E%3Cpath d='M10.5 10.5 L13.5 13.5' stroke-linecap='round'/%3E%3C/svg%3E")
+        0.8rem 50% / 16px no-repeat;
+      color: var(--ink);
+      font: inherit;
+      outline: none;
+    }
+    #filter::placeholder { color: var(--faint); }
+    #filter:focus {
+      border-color: var(--line-strong);
+      box-shadow: 0 0 0 3px rgba(142, 176, 255, 0.16);
+    }
+    .status {
+      margin: 0;
+      color: var(--faint);
+      font-size: 0.78rem;
+      font-variant-numeric: tabular-nums;
+    }
+    .banner {
+      margin: 0 0 1rem;
+      padding: 0.7rem 0.9rem;
+      border: 1px solid var(--line);
+      border-radius: 10px;
+      background: rgba(142, 176, 255, 0.06);
+      color: var(--muted);
+      font-size: 0.85rem;
+    }
+    .banner[hidden] { display: none; }
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+      gap: 0.7rem;
+    }
+    .card {
+      position: relative;
+      display: flex;
+      background: var(--card);
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      min-height: 8.2rem;
+      transition: border-color 140ms ease, transform 140ms ease, background 140ms ease;
+    }
+    .card:hover,
+    .card:focus-within {
+      border-color: var(--line-strong);
+      transform: translateY(-1px);
+      background: rgba(20, 28, 52, 0.9);
+    }
+    .card-body {
+      display: flex;
+      flex-direction: column;
+      gap: 0.28rem;
+      flex: 1;
+      padding: 0.9rem 4.6rem 0.9rem 1rem;
+      color: inherit;
+      text-decoration: none;
+      min-width: 0;
+    }
+    .card-body:focus-visible {
+      outline: 2px solid var(--accent);
+      outline-offset: -3px;
+      border-radius: var(--radius);
+    }
+    .slug {
+      font: 500 0.7rem/1.2 var(--mono);
+      letter-spacing: 0.02em;
+      color: var(--accent);
+    }
+    .card h2 {
+      margin: 0;
+      font-size: 1rem;
+      font-weight: 600;
+      letter-spacing: -0.02em;
       white-space: nowrap;
       overflow: hidden;
       text-overflow: ellipsis;
     }
-    .pipe-stack-pill b {
-      color: var(--cyan);
-      font-weight: 600;
-      margin-right: 0.25rem;
-    }
-    .pipe-arrow {
-      color: var(--ink-faint);
-      display: flex;
-      align-items: center;
-      justify-content: center;
-    }
-    .pipe-arrow svg {
-      width: 18px;
-      height: 18px;
-      stroke: var(--ink-faint);
-      animation: shift-arrow 2s infinite ease-in-out;
-    }
-    @keyframes shift-arrow {
-      0%, 100% { transform: translateX(0); opacity: 0.4; }
-      50% { transform: translateX(3px); opacity: 0.9; stroke: var(--cyan); }
-    }
-
-    /* ===================================================
-       投票窗区：本窗倒计时 · 无候选隐藏 · 级联过滤
-       =================================================== */
-    .vote-panel {
-      margin-bottom: 2.8rem;
-      background: var(--bg-surface);
-      border: 1px solid var(--border);
-      border-radius: var(--radius-lg);
-      padding: 1.6rem 1.8rem;
-      backdrop-filter: blur(20px);
-      box-shadow: 0 16px 40px rgba(0, 0, 0, 0.45);
-      position: relative;
-      transition: all 0.3s ease;
-    }
-    .vote-panel[hidden] {
-      display: none !important;
-    }
-
-    .vote-hero-row {
-      display: grid;
-      grid-template-columns: 1fr auto;
-      gap: 1.5rem;
-      align-items: center;
-      margin-bottom: 1.6rem;
-      padding-bottom: 1.2rem;
-      border-bottom: 1px solid rgba(142, 176, 255, 0.1);
-    }
-    .vote-hero-left h2 {
+    .card p {
       margin: 0;
-      font-size: 1.4rem;
-      font-weight: 800;
-      letter-spacing: -0.02em;
-      display: flex;
-      align-items: center;
-      gap: 0.6rem;
-    }
-    .vote-hero-badge {
-      font-family: var(--mono);
-      font-size: 0.68rem;
-      font-weight: 700;
-      padding: 0.2rem 0.55rem;
-      border-radius: var(--radius-pill);
-      background: rgba(245, 158, 11, 0.15);
-      border: 1px solid rgba(245, 158, 11, 0.4);
-      color: var(--amber);
-    }
-    .vote-hero-subtitle {
-      margin: 0.4rem 0 0;
-      font-size: 0.84rem;
-      color: var(--ink-muted);
-    }
-
-    /* 本窗倒计时 HUD 仪表 */
-    .timer-hud {
-      display: flex;
-      flex-direction: column;
-      align-items: flex-end;
-      background: rgba(6, 10, 20, 0.85);
-      border: 1px solid rgba(245, 158, 11, 0.3);
-      padding: 0.7rem 1.2rem;
-      border-radius: var(--radius-md);
-      box-shadow: 0 0 25px rgba(245, 158, 11, 0.12);
-      min-width: 220px;
-    }
-    .timer-hud-label {
-      font-family: var(--mono);
-      font-size: 0.65rem;
-      font-weight: 700;
-      text-transform: uppercase;
-      letter-spacing: 0.08em;
-      color: var(--amber);
-      display: flex;
-      align-items: center;
-      gap: 0.35rem;
-    }
-    .timer-hud-label .t-dot {
-      width: 6px;
-      height: 6px;
-      border-radius: 50%;
-      background: var(--amber);
-      box-shadow: 0 0 6px var(--amber);
-      animation: pulse-dot 1s infinite;
-    }
-    .timer-digits {
-      font-family: var(--mono);
-      font-size: 2.6rem;
-      font-weight: 800;
-      letter-spacing: -0.04em;
-      color: #fff;
-      text-shadow: 0 0 20px rgba(245, 158, 11, 0.6);
-      line-height: 1.1;
-      margin: 0.1rem 0;
-      font-variant-numeric: tabular-nums;
-    }
-    .timer-progress-track {
-      width: 100%;
-      height: 4px;
-      background: rgba(255, 255, 255, 0.08);
-      border-radius: 99px;
+      color: var(--muted);
+      font-size: 0.82rem;
+      line-height: 1.4;
+      display: -webkit-box;
+      -webkit-line-clamp: 2;
+      line-clamp: 2;
+      -webkit-box-orient: vertical;
       overflow: hidden;
-      margin-top: 0.3rem;
     }
-    .timer-progress-bar {
-      height: 100%;
-      width: 100%;
-      background: linear-gradient(90deg, var(--amber), #f43f5e);
-      box-shadow: 0 0 8px var(--amber);
-      transition: width 1s linear;
+    .card .rationale {
+      color: var(--faint);
+      font-size: 0.74rem;
+      -webkit-line-clamp: 2;
+      line-clamp: 2;
     }
-
-    /* 候选卡片列表 (含 rationaleZh) */
-    .cand-section {
-      margin-bottom: 1.6rem;
+    .card .rationale::before {
+      content: "为何做 · ";
+      color: var(--accent);
+      font-weight: 600;
     }
-    .cand-heading {
-      font-size: 0.8rem;
-      font-weight: 700;
-      color: var(--ink-muted);
-      text-transform: uppercase;
-      letter-spacing: 0.06em;
-      margin-bottom: 0.6rem;
+    .tags {
       display: flex;
+      flex-wrap: wrap;
+      gap: 0.32rem;
+      margin-top: auto;
+      padding-top: 0.32rem;
+    }
+    .tag {
+      display: inline-flex;
       align-items: center;
-      gap: 0.4rem;
-    }
-    .cand-card {
-      display: grid;
-      grid-template-columns: auto 1fr;
-      gap: 0.9rem;
-      background: rgba(142, 176, 255, 0.03);
-      border: 1px solid var(--border);
-      border-radius: var(--radius-md);
-      padding: 1rem 1.2rem;
-      transition: all 0.2s ease;
-      cursor: pointer;
-      margin-bottom: 0.6rem;
-      position: relative;
-    }
-    .cand-card:hover {
-      border-color: var(--border-hover);
+      padding: 0.12rem 0.46rem;
+      border-radius: 999px;
+      font: 500 0.68rem/1.25 var(--mono);
+      letter-spacing: 0.01em;
+      white-space: nowrap;
+      border: 1px solid var(--line);
       background: rgba(142, 176, 255, 0.06);
+      color: var(--muted);
+      transition: border-color 140ms ease, color 140ms ease, background 140ms ease;
     }
-    .cand-card input[type="radio"] {
-      margin-top: 0.3rem;
-      accent-color: var(--cyan);
-      cursor: pointer;
-      width: 18px;
-      height: 18px;
+    .tag-fuel {
+      color: #b8c7ff;
+      border-color: rgba(184, 199, 255, 0.2);
+      background: rgba(184, 199, 255, 0.06);
     }
-    .cand-body {
-      display: flex;
-      flex-direction: column;
-      gap: 0.4rem;
+    .tag-harness {
+      color: #cbb6ff;
+      border-color: rgba(203, 182, 255, 0.2);
+      background: rgba(203, 182, 255, 0.06);
     }
-    .cand-title-row {
-      display: flex;
-      align-items: baseline;
-      justify-content: space-between;
-      gap: 0.8rem;
-      flex-wrap: wrap;
+    .tag-env {
+      color: #7ee7c9;
+      border-color: rgba(126, 231, 201, 0.2);
+      background: rgba(126, 231, 201, 0.06);
     }
-    .cand-title {
-      font-size: 1.05rem;
-      font-weight: 700;
-      color: var(--ink);
-      margin: 0;
+    .card:hover .tag-fuel,
+    .card:focus-within .tag-fuel {
+      border-color: rgba(184, 199, 255, 0.38);
+      background: rgba(184, 199, 255, 0.1);
     }
-    .cand-author {
-      font-family: var(--mono);
-      font-size: 0.78rem;
-      color: var(--cyan);
+    .card:hover .tag-harness,
+    .card:focus-within .tag-harness {
+      border-color: rgba(203, 182, 255, 0.38);
+      background: rgba(203, 182, 255, 0.1);
     }
-    
-    /* 重点：rationaleZh 视觉呈现 */
-    .rationale-strip {
-      background: rgba(56, 189, 248, 0.07);
-      border-left: 3px solid var(--cyan);
-      border-radius: 0 var(--radius-sm) var(--radius-sm) 0;
-      padding: 0.45rem 0.75rem;
-      margin-top: 0.2rem;
+    .card:hover .tag-env,
+    .card:focus-within .tag-env {
+      border-color: rgba(126, 231, 201, 0.38);
+      background: rgba(126, 231, 201, 0.1);
     }
-    .rationale-tag {
-      font-family: var(--mono);
-      font-size: 0.66rem;
-      font-weight: 700;
-      color: var(--cyan);
-      text-transform: uppercase;
-      letter-spacing: 0.06em;
-      margin-bottom: 0.2rem;
-      display: block;
-    }
-    .rationale-text {
-      font-size: 0.82rem;
-      color: #e2e8f0;
-      line-height: 1.45;
-      margin: 0;
-    }
-    .cand-plan {
-      font-size: 0.78rem;
-      color: var(--ink-muted);
-      margin: 0;
-      line-height: 1.45;
-    }
-    .cand-origin-link {
-      display: inline-flex;
-      align-items: center;
-      gap: 0.3rem;
-      font-family: var(--mono);
-      font-size: 0.72rem;
-      color: var(--ink-faint);
-      text-decoration: none;
-      align-self: flex-start;
-      margin-top: 0.25rem;
-      transition: color 0.15s;
-    }
-    .cand-origin-link:hover { color: var(--cyan); }
-
-    /* 技术栈投票表单与级联限制 */
-    .stack-vote-form {
-      display: flex;
-      flex-direction: column;
-      gap: 1.4rem;
-    }
-    .stack-vote-cols {
-      display: grid;
-      grid-template-columns: repeat(4, 1fr);
-      gap: 1rem;
-    }
-    .vote-col {
-      background: rgba(6, 10, 20, 0.55);
-      border: 1px solid var(--border);
-      border-radius: var(--radius-md);
-      padding: 0.9rem;
-      display: flex;
-      flex-direction: column;
-      gap: 0.55rem;
-    }
-    .vote-col-legend {
-      font-size: 0.8rem;
-      font-weight: 700;
-      color: var(--ink);
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      margin-bottom: 0.2rem;
-    }
-    .vote-col-badge {
-      font-family: var(--mono);
-      font-size: 0.64rem;
-      color: var(--ink-faint);
-    }
-    .choice-label {
-      display: flex;
-      align-items: flex-start;
-      gap: 0.5rem;
-      padding: 0.45rem 0.55rem;
-      border-radius: var(--radius-sm);
-      border: 1px solid rgba(142, 176, 255, 0.08);
-      background: rgba(142, 176, 255, 0.02);
-      cursor: pointer;
-      transition: all 0.15s ease;
-      font-size: 0.8rem;
-      user-select: none;
-    }
-    .choice-label:hover:not(.is-disabled) {
-      background: rgba(142, 176, 255, 0.08);
-      border-color: var(--border-hover);
-    }
-    .choice-label input[type="radio"] {
-      margin-top: 0.15rem;
-      accent-color: var(--cyan);
-      cursor: pointer;
-    }
-    .choice-title {
-      font-weight: 600;
-      color: var(--ink);
-      line-height: 1.3;
-    }
-    .choice-note {
-      display: block;
-      font-family: var(--mono);
-      font-size: 0.66rem;
-      color: var(--ink-faint);
-      margin-top: 0.1rem;
-    }
-    
-    /* 重点：Cursor系模型级联禁用样式 (Captain Correction 2) */
-    .choice-label.is-disabled {
-      opacity: 0.32;
-      cursor: not-allowed;
-      border-style: dashed;
-      background: transparent !important;
-      border-color: rgba(255, 255, 255, 0.06);
-    }
-    .choice-label.is-disabled .choice-title {
-      color: var(--ink-faint);
-      text-decoration: line-through;
-    }
-    .choice-label.is-disabled .choice-note {
-      color: var(--rose);
-    }
-    .choice-label.is-recommended {
-      border-color: rgba(16, 185, 129, 0.35);
-      background: rgba(16, 185, 129, 0.04);
-    }
-
-    /* 投票操作行 */
-    .vote-action-bar {
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      gap: 1rem;
-      padding-top: 1rem;
-      border-top: 1px solid rgba(142, 176, 255, 0.1);
-      flex-wrap: wrap;
-    }
-    .vote-submit-btn {
-      appearance: none;
-      background: linear-gradient(135deg, #0284c7, #2563eb);
-      border: 1px solid rgba(56, 189, 248, 0.5);
-      border-radius: var(--radius-md);
-      color: #fff;
-      font-family: var(--sans);
-      font-size: 0.92rem;
-      font-weight: 700;
-      padding: 0.7rem 1.6rem;
-      cursor: pointer;
-      display: inline-flex;
-      align-items: center;
-      gap: 0.5rem;
-      box-shadow: 0 4px 20px rgba(37, 99, 235, 0.3);
-      transition: all 0.2s ease;
-    }
-    .vote-submit-btn:hover:not(:disabled) {
-      background: linear-gradient(135deg, #0369a1, #1d4ed8);
-      box-shadow: 0 6px 25px rgba(56, 189, 248, 0.4);
-      transform: translateY(-1px);
-    }
-    .vote-submit-btn:disabled {
-      opacity: 0.45;
-      cursor: not-allowed;
-      box-shadow: none;
-      transform: none;
-    }
-    .vote-msg {
-      font-size: 0.8rem;
-      color: var(--ink-muted);
-      margin: 0;
-    }
-    .vote-msg[data-kind="ok"] { color: var(--emerald); font-weight: 600; }
-    .vote-msg[data-kind="err"] { color: var(--rose); font-weight: 600; }
-
-    /* 实时计票 HUD */
-    .tallies-box {
-      margin-top: 1.4rem;
-      padding: 1rem 1.2rem;
-      background: rgba(6, 10, 20, 0.6);
-      border: 1px solid rgba(142, 176, 255, 0.1);
-      border-radius: var(--radius-md);
-    }
-    .tallies-head {
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      margin-bottom: 0.75rem;
-    }
-    .tallies-title {
-      font-family: var(--mono);
-      font-size: 0.76rem;
-      font-weight: 700;
-      color: var(--cyan);
-      text-transform: uppercase;
-      letter-spacing: 0.06em;
-      margin: 0;
-    }
-    .tallies-grid {
-      display: grid;
-      grid-template-columns: repeat(3, 1fr);
-      gap: 1rem;
-    }
-    .tally-group h4 {
-      margin: 0 0 0.4rem;
-      font-size: 0.74rem;
-      color: var(--ink-faint);
-    }
-    .tally-bar-row {
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      gap: 0.5rem;
-      font-size: 0.74rem;
-      font-family: var(--mono);
-      padding: 0.2rem 0;
-      color: var(--ink-muted);
-    }
-    .tally-bar-row b {
-      color: var(--amber);
-    }
-    .tallies-winner {
-      margin-top: 0.75rem;
-      padding-top: 0.55rem;
-      border-top: 1px dashed rgba(142, 176, 255, 0.1);
-      font-size: 0.76rem;
-      color: var(--ink-muted);
-    }
-
-    /* ===================================================
-       已上线演示展示区 (开发后卡片 · rationaleZh)
-       =================================================== */
-    .demos-section {
-      margin-bottom: 3.5rem;
-    }
-    .demos-toolbar {
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      gap: 1rem;
-      margin-bottom: 1.4rem;
-      flex-wrap: wrap;
-    }
-    .demos-title-group h3 {
-      margin: 0;
-      font-size: 1.3rem;
-      font-weight: 800;
-      letter-spacing: -0.02em;
-    }
-    .demos-title-group p {
-      margin: 0.25rem 0 0;
-      font-size: 0.82rem;
-      color: var(--ink-muted);
-    }
-    .search-box {
-      position: relative;
-      width: min(100%, 320px);
-    }
-    .search-input {
-      width: 100%;
-      background: rgba(14, 20, 36, 0.8);
-      border: 1px solid var(--border);
-      border-radius: var(--radius-pill);
-      padding: 0.55rem 1rem 0.55rem 2.4rem;
-      color: var(--ink);
-      font-family: var(--sans);
-      font-size: 0.84rem;
-      outline: none;
-      transition: all 0.2s ease;
-    }
-    .search-input:focus {
-      border-color: var(--cyan);
-      box-shadow: 0 0 15px var(--cyan-glow);
-    }
-    .search-icon {
+    .origin {
       position: absolute;
-      left: 0.85rem;
-      top: 50%;
-      transform: translateY(-50%);
-      width: 15px;
-      height: 15px;
-      stroke: var(--ink-faint);
-      pointer-events: none;
-    }
-
-    /* 演示网格 */
-    .cards-grid {
-      display: grid;
-      grid-template-columns: repeat(auto-fill, minmax(340px, 1fr));
-      gap: 1.25rem;
-    }
-    .card {
-      background: var(--bg-surface);
-      border: 1px solid var(--border);
-      border-radius: var(--radius-lg);
-      padding: 1.3rem;
-      display: flex;
-      flex-direction: column;
-      justify-content: space-between;
-      gap: 1rem;
-      transition: all 0.25s cubic-bezier(0.16, 1, 0.3, 1);
-      position: relative;
-      overflow: hidden;
-      backdrop-filter: blur(14px);
-    }
-    .card::before {
-      content: "";
-      position: absolute;
-      top: 0;
-      left: 0;
-      width: 100%;
-      height: 100%;
-      background: radial-gradient(circle 300px at var(--mouse-x, 50%) var(--mouse-y, 0%), rgba(56, 189, 248, 0.08), transparent 70%);
-      pointer-events: none;
-      opacity: 0;
-      transition: opacity 0.3s;
-    }
-    .card:hover {
-      border-color: var(--border-hover);
-      transform: translateY(-3px);
-      box-shadow: 0 12px 35px rgba(0, 0, 0, 0.45);
-    }
-    .card:hover::before { opacity: 1; }
-
-    .card-top {
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      gap: 0.5rem;
-    }
-    .card-slug-badge {
-      font-family: var(--mono);
-      font-size: 0.72rem;
-      font-weight: 700;
-      padding: 0.2rem 0.5rem;
-      border-radius: 6px;
-      background: rgba(56, 189, 248, 0.1);
-      border: 1px solid rgba(56, 189, 248, 0.25);
-      color: var(--cyan);
-    }
-    .card-origin-btn {
-      font-family: var(--mono);
-      font-size: 0.7rem;
-      color: var(--ink-faint);
+      top: 0.75rem;
+      right: 0.75rem;
+      z-index: 1;
+      padding: 0.22rem 0.55rem;
+      border: 1px solid var(--line);
+      border-radius: 999px;
+      color: var(--muted);
       text-decoration: none;
-      display: inline-flex;
-      align-items: center;
-      gap: 0.25rem;
-      padding: 0.18rem 0.45rem;
-      border-radius: 4px;
-      border: 1px solid transparent;
-      transition: all 0.15s;
+      font-size: 0.72rem;
+      letter-spacing: 0.04em;
+      background: rgba(8, 11, 20, 0.45);
     }
-    .card-origin-btn:hover {
-      color: var(--cyan);
-      border-color: var(--border);
-      background: rgba(142, 176, 255, 0.04);
+    .origin:hover,
+    .origin:focus-visible {
+      color: var(--ink);
+      border-color: var(--accent);
     }
-
-    .card-title {
+    .origin:focus-visible {
+      outline: 2px solid var(--accent);
+      outline-offset: 2px;
+    }
+    .empty {
+      grid-column: 1 / -1;
+      margin: 0;
+      padding: 2rem 1rem;
+      text-align: center;
+      color: var(--muted);
+      border: 1px dashed var(--line);
+      border-radius: var(--radius);
+    }
+    .arsenal-wrap {
+      margin-top: 2.8rem;
+      padding-top: 1.6rem;
+      border-top: 1px solid var(--line);
+    }
+    .arsenal-wrap[hidden] { display: none; }
+    .arsenal-header {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: flex-end;
+      justify-content: space-between;
+      gap: 0.5rem 1.5rem;
+      margin-bottom: 1.1rem;
+    }
+    .arsenal-title {
+      margin: 0;
       font-size: 1.18rem;
       font-weight: 700;
-      color: var(--ink);
-      margin: 0.2rem 0 0.4rem;
-      line-height: 1.35;
+      letter-spacing: -0.02em;
     }
-    
-    /* 重点：卡片立项理由 rationaleZh 独立区 */
-    .card-rationale-box {
-      background: rgba(14, 23, 44, 0.6);
-      border-left: 2.5px solid var(--purple);
-      border-radius: 0 6px 6px 0;
-      padding: 0.45rem 0.7rem;
-      margin: 0.2rem 0;
-    }
-    .card-rationale-tag {
-      font-family: var(--mono);
-      font-size: 0.65rem;
-      font-weight: 700;
-      color: var(--purple);
-      text-transform: uppercase;
-      letter-spacing: 0.05em;
-      margin-bottom: 0.15rem;
-      display: block;
-    }
-    .card-rationale-text {
-      font-size: 0.8rem;
-      color: #cbd5e1;
-      line-height: 1.42;
+    .arsenal-lede {
       margin: 0;
-    }
-
-    .card-tags {
-      display: flex;
-      flex-wrap: wrap;
-      gap: 0.4rem;
-      margin-top: 0.4rem;
-    }
-    .card-tag {
-      font-family: var(--mono);
-      font-size: 0.68rem;
-      padding: 0.2rem 0.5rem;
-      border-radius: var(--radius-pill);
-      background: rgba(142, 176, 255, 0.05);
-      border: 1px solid rgba(142, 176, 255, 0.12);
-      color: var(--ink-muted);
-      white-space: nowrap;
-    }
-    .card-tag.tag-fuel {
-      border-color: rgba(56, 189, 248, 0.25);
-      color: #7dd3fc;
-      background: rgba(56, 189, 248, 0.06);
-    }
-    .card-tag.tag-harness {
-      border-color: rgba(168, 85, 247, 0.25);
-      color: #d8b4fe;
-      background: rgba(168, 85, 247, 0.06);
-    }
-    .card-tag.tag-env {
-      border-color: rgba(16, 185, 129, 0.25);
-      color: #6ee7b7;
-      background: rgba(16, 185, 129, 0.06);
-    }
-
-    .card-bottom {
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      gap: 0.8rem;
-      padding-top: 0.85rem;
-      border-top: 1px solid rgba(142, 176, 255, 0.08);
-      margin-top: auto;
-    }
-    .card-author-meta {
-      font-family: var(--mono);
-      font-size: 0.72rem;
-      color: var(--ink-faint);
-    }
-    .card-enter-btn {
-      display: inline-flex;
-      align-items: center;
-      gap: 0.35rem;
-      font-size: 0.82rem;
-      font-weight: 700;
-      color: var(--ink);
-      text-decoration: none;
-      padding: 0.4rem 0.85rem;
-      border-radius: var(--radius-sm);
-      background: rgba(142, 176, 255, 0.08);
-      border: 1px solid var(--border-strong);
-      transition: all 0.15s ease;
-    }
-    .card-enter-btn:hover {
-      background: var(--cyan);
-      color: #030712;
-      border-color: var(--cyan);
-      box-shadow: 0 0 15px var(--cyan-glow);
-    }
-
-    /* ===================================================
-       军火库三层架构 (Fuel / Harness / Environment)
-       =================================================== */
-    .arsenal-section {
-      background: var(--bg-surface);
-      border: 1px solid var(--border);
-      border-radius: var(--radius-lg);
-      padding: 1.8rem;
-      backdrop-filter: blur(16px);
-      margin-bottom: 3rem;
-    }
-    .arsenal-section[hidden] { display: none; }
-    .arsenal-top {
-      margin-bottom: 1.4rem;
-    }
-    .arsenal-top-kicker {
-      font-family: var(--mono);
-      font-size: 0.72rem;
-      font-weight: 700;
-      color: var(--emerald);
-      text-transform: uppercase;
-      letter-spacing: 0.08em;
-      margin: 0 0 0.2rem;
-    }
-    .arsenal-top-title {
-      font-size: 1.28rem;
-      font-weight: 800;
-      margin: 0 0 0.3rem;
-    }
-    .arsenal-top-desc {
+      color: var(--muted);
       font-size: 0.84rem;
-      color: var(--ink-muted);
-      margin: 0;
+      max-width: 32rem;
     }
-    .arsenal-3tiers {
+    .arsenal-grid {
       display: grid;
-      grid-template-columns: repeat(3, 1fr);
-      gap: 1.2rem;
+      grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+      gap: 0.85rem;
     }
-    .arsenal-column {
-      background: rgba(6, 10, 20, 0.6);
-      border: 1px solid var(--border);
-      border-radius: var(--radius-md);
-      padding: 1.1rem;
+    .arsenal-col {
+      background: var(--card);
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      padding: 0.95rem 1rem;
       display: flex;
       flex-direction: column;
     }
-    .tier-header {
-      margin-bottom: 0.8rem;
-      padding-bottom: 0.6rem;
-      border-bottom: 1px solid rgba(142, 176, 255, 0.08);
+    .arsenal-col-header {
+      margin-bottom: 0.75rem;
+      padding-bottom: 0.55rem;
+      border-bottom: 1px solid var(--line);
     }
-    .tier-title {
-      font-size: 0.96rem;
-      font-weight: 700;
+    .arsenal-col-title {
+      margin: 0;
+      font-size: 0.92rem;
+      font-weight: 600;
       color: var(--ink);
-      margin: 0 0 0.2rem;
       display: flex;
       align-items: center;
       justify-content: space-between;
     }
-    .tier-badge {
-      font-family: var(--mono);
-      font-size: 0.65rem;
-      padding: 0.15rem 0.4rem;
-      border-radius: 4px;
-      background: rgba(142, 176, 255, 0.08);
-      color: var(--ink-faint);
+    .arsenal-col-blurb {
+      margin: 0.25rem 0 0;
+      font-size: 0.75rem;
+      color: var(--faint);
     }
-    .tier-blurb {
-      font-size: 0.74rem;
-      color: var(--ink-muted);
-      margin: 0;
-    }
-    .tier-list {
+    .arsenal-list {
       list-style: none;
       margin: 0;
       padding: 0;
       display: flex;
       flex-direction: column;
-      gap: 0.5rem;
+      gap: 0.55rem;
     }
-    .tier-item {
-      padding: 0.55rem 0.7rem;
-      border-radius: var(--radius-sm);
-      background: rgba(142, 176, 255, 0.02);
+    .arsenal-item {
+      display: flex;
+      flex-direction: column;
+      gap: 0.18rem;
+      padding: 0.4rem 0.5rem;
+      border-radius: 8px;
+      background: rgba(142, 176, 255, 0.025);
       border: 1px solid rgba(142, 176, 255, 0.08);
-      transition: all 0.15s ease;
+      transition: border-color 140ms ease, background 140ms ease;
     }
-    .tier-item:hover {
-      background: rgba(142, 176, 255, 0.06);
-      border-color: rgba(142, 176, 255, 0.2);
+    .arsenal-item:hover {
+      background: rgba(142, 176, 255, 0.05);
+      border-color: rgba(142, 176, 255, 0.18);
     }
-    .tier-item.is-planned {
+    .arsenal-item.is-planned {
+      opacity: 0.52;
       border-style: dashed;
-      opacity: 0.5;
+      background: transparent;
     }
-    .tier-item.is-planned:hover { opacity: 0.8; }
-    .tier-item-row {
+    .arsenal-item.is-planned:hover {
+      opacity: 0.78;
+    }
+    .arsenal-item-top {
       display: flex;
       align-items: center;
       justify-content: space-between;
-      gap: 0.4rem;
-      margin-bottom: 0.2rem;
+      gap: 0.5rem;
     }
-    .tier-item-name {
+    .arsenal-item-name {
       font-size: 0.82rem;
       font-weight: 600;
       color: var(--ink);
     }
-    .status-chip {
-      font-family: var(--mono);
-      font-size: 0.62rem;
-      font-weight: 700;
-      padding: 0.1rem 0.35rem;
-      border-radius: var(--radius-pill);
+    .arsenal-badge {
+      font: 500 0.64rem/1.2 var(--mono);
+      padding: 0.08rem 0.38rem;
+      border-radius: 999px;
+      white-space: nowrap;
     }
-    .status-chip.chip-active {
-      background: rgba(16, 185, 129, 0.15);
-      border: 1px solid rgba(16, 185, 129, 0.35);
-      color: #34d399;
+    .arsenal-badge.status-active {
+      background: rgba(126, 231, 201, 0.12);
+      border: 1px solid rgba(126, 231, 201, 0.28);
+      color: #7ee7c9;
     }
-    .status-chip.chip-planned {
-      background: rgba(142, 176, 255, 0.05);
-      border: 1px solid rgba(142, 176, 255, 0.15);
-      color: var(--ink-faint);
+    .arsenal-badge.status-planned {
+      background: rgba(142, 176, 255, 0.06);
+      border: 1px solid rgba(142, 176, 255, 0.16);
+      color: var(--faint);
     }
-    .tier-item-note {
-      font-size: 0.72rem;
-      color: var(--ink-muted);
+    .arsenal-item-note {
+      font-size: 0.73rem;
+      color: var(--muted);
       line-height: 1.35;
-      display: block;
     }
-
-    /* 底部标注 */
     footer {
-      border-top: 1px solid var(--border);
-      padding-top: 1.6rem;
-      color: var(--ink-faint);
-      font-size: 0.78rem;
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      flex-wrap: wrap;
-      gap: 0.8rem;
+      margin-top: 1.75rem;
+      color: var(--faint);
+      font-size: 0.8rem;
     }
-    footer a { color: var(--cyan); text-decoration: none; }
+    footer a { color: var(--accent); text-decoration: none; }
     footer a:hover { text-decoration: underline; }
-
-    /* 响应式断点 */
-    @media (max-width: 960px) {
-      .pipeline-strip {
-        grid-template-columns: 1fr;
-        gap: 0.6rem;
-      }
-      .pipe-arrow { display: none; }
-      .stack-vote-cols { grid-template-columns: 1fr 1fr; }
-      .arsenal-3tiers { grid-template-columns: 1fr; }
-      .vote-hero-row { grid-template-columns: 1fr; }
-      .timer-hud { align-items: flex-start; }
+    code {
+      font-family: var(--mono);
+      font-size: 0.86em;
     }
-    @media (max-width: 640px) {
-      .stack-vote-cols { grid-template-columns: 1fr; }
-      .tallies-grid { grid-template-columns: 1fr; }
-      .cards-grid { grid-template-columns: 1fr; }
-      .shell { width: calc(100% - 1.5rem); padding-top: 1.2rem; }
+    @media (max-width: 560px) {
+      .wrap { width: min(100% - 1.5rem, 960px); padding-top: 1.6rem; }
+      .tools { align-items: stretch; }
+      #filter { width: 100%; }
+      .card-body { padding-right: 4.4rem; }
     }
   </style>
 </head>
 <body>
-  <!-- 背景动画画布与光晕网格 -->
-  <canvas id="bg-canvas"></canvas>
-  <div class="ambient-glow" aria-hidden="true"></div>
-  <div class="grid-lines" aria-hidden="true"></div>
-
-  <div class="shell">
-    <!-- 顶部状态栏与品牌 -->
-    <header class="top-bar">
+  <div class="wrap">
+    <header class="top">
       <div class="brand">
-        <div class="brand-icon" aria-hidden="true">
-          <svg viewBox="0 0 24 24" stroke-width="2">
-            <polygon points="12 2 2 7 12 12 22 7 12 2" />
-            <polyline points="2 17 12 22 22 17" />
-            <polyline points="2 12 12 17 22 12" />
-          </svg>
-        </div>
-        <div>
-          <h1 class="brand-title">书签演示实验室 <span class="brand-tag">HUB v2</span></h1>
-          <p class="brand-sub">从 X 书签到一页可点静态演示 · 短窗自动轮转交付</p>
-        </div>
+        <p class="kicker">静态预览基座</p>
+        <h1>书签演示实验室</h1>
+        <p class="lede">从 X 书签长出来的静态演示。点卡片进应用，点「原帖」回书签。</p>
       </div>
-      <div class="hud-telemetry">
-        <span class="hud-pill live"><span class="dot pulse"></span>LIVE /api/window</span>
-        <span class="hud-pill"><span class="dot"></span>Cloudflare KV 实时同步</span>
-        <span class="hud-pill" id="hud-shipped-count"><span class="dot"></span>已上线 6 个 Demo</span>
+      <div class="tools">
+        <label for="filter">筛选演示</label>
+        <input id="filter" type="search" placeholder="筛选 slug、标题、作者…" autocomplete="off" />
+        <p class="status" id="status" aria-live="polite">正在载入演示…</p>
       </div>
     </header>
 
-    <!-- 流水线状态条：开发前（投票/排队）→ 开发中（显示燃料/harness/模型/环境）→ 开发后（已上线 demo 卡） -->
-    <section class="pipeline-container" aria-label="开发流转状态条">
-      <div class="pipeline-header">
-        <div class="pipeline-title">
-          <svg viewBox="0 0 24 24" fill="none" stroke-width="2">
-            <polyline points="22 12 18 12 15 21 9 3 6 12 2 12" />
-          </svg>
-          自动化流水线当前状态
+    <p class="banner" id="banner" hidden></p>
+
+    <section class="ballot-wrap" id="ballot" hidden aria-label="待投票 · 本窗方案">
+      <div class="ballot-header">
+        <div>
+          <p class="kicker">本窗方案</p>
+          <h2 class="ballot-title">待投票</h2>
         </div>
-        <div class="pipeline-meta" id="pipe-window-meta">读取中…</div>
+        <p class="ballot-meta" id="ballot-meta"></p>
       </div>
-
-      <div class="pipeline-strip">
-        <!-- 阶段 1：开发前（投票/排队） -->
-        <div class="pipe-node pipe-pre" id="pipe-stage-pre">
-          <div class="pipe-badge"><span class="pip-dot"></span>开发前 · 投票 / 排队</div>
-          <p class="pipe-name" id="pipe-pre-title">1 候选待投票</p>
-          <p class="pipe-desc" id="pipe-pre-desc">短窗轮转开启中，决定下一拍栈</p>
-        </div>
-
-        <div class="pipe-arrow" aria-hidden="true">
-          <svg viewBox="0 0 24 24" fill="none" stroke-width="2">
-            <line x1="5" y1="12" x2="19" y2="12" />
-            <polyline points="12 5 19 12 12 19" />
-          </svg>
-        </div>
-
-        <!-- 阶段 2：开发中（显示燃料/harness/模型/环境） -->
-        <div class="pipe-node pipe-mid is-active" id="pipe-stage-mid">
-          <div class="pipe-badge"><span class="pip-dot"></span>开发中 · 自动化构建技术栈</div>
-          <div class="pipe-stack-grid">
-            <div class="pipe-stack-pill" id="pipe-pill-fuel" title="燃料"><b>燃料</b>Cursor Ultra</div>
-            <div class="pipe-stack-pill" id="pipe-pill-model" title="模型"><b>模型</b>grok-4.6</div>
-            <div class="pipe-stack-pill" id="pipe-pill-harness" title="Harness"><b>载体</b>Cursor Cloud Agent</div>
-            <div class="pipe-stack-pill" id="pipe-pill-env" title="7×24环境"><b>环境</b>Cloud Agent 托管机</div>
-          </div>
-          <p class="pipe-desc" style="margin-top: 0.35rem;" id="pipe-mid-sub">自主分支拉取 · 测试验证 · 零人工介入</p>
-        </div>
-
-        <div class="pipe-arrow" aria-hidden="true">
-          <svg viewBox="0 0 24 24" fill="none" stroke-width="2">
-            <line x1="5" y1="12" x2="19" y2="12" />
-            <polyline points="12 5 19 12 12 19" />
-          </svg>
-        </div>
-
-        <!-- 阶段 3：开发后（已上线 demo 卡） -->
-        <div class="pipe-node pipe-post" id="pipe-stage-post">
-          <div class="pipe-badge"><span class="pip-dot"></span>开发后 · 静态验证交付</div>
-          <p class="pipe-name" id="pipe-post-title">6 个演示已上线</p>
-          <p class="pipe-desc" id="pipe-post-desc">最新：Google 创作者工具箱 (google-creator-kit)</p>
-        </div>
-      </div>
-    </section>
-
-    <!-- 投票区：必须满足「本窗倒计时」、「无候选隐藏投票」、「候选 rationaleZh」、「Cursor系则模型仅Grok/Composer可选其余disabled」 -->
-    <section class="vote-panel" id="vote-panel" hidden aria-label="本窗方案投票">
-      <div class="vote-hero-row">
-        <div class="vote-hero-left">
-          <h2>
-            本窗方案投票
-            <span class="vote-hero-badge" id="vote-window-badge">窗 2026-09-16-08</span>
-          </h2>
-          <p class="vote-hero-subtitle" id="vote-ingest-note">
-            基于最新 X 书签构建增量候选。技术栈由你决定，无需登录，单 IP 单窗限投一次。
-          </p>
-        </div>
-        <!-- 本窗倒计时 HUD 仪表（标签由 closesAt−opensAt 推导） -->
-        <div class="timer-hud">
-          <div class="timer-hud-label">
-            <span class="t-dot"></span><span id="timer-hud-label-text">本窗倒计时</span>
-          </div>
-          <div class="timer-digits" id="timer-digits">--:--</div>
-          <div class="timer-progress-track">
-            <div class="timer-progress-bar" id="timer-progress-bar"></div>
-          </div>
-        </div>
-      </div>
-
-      <!-- 候选项列表 (含 rationaleZh) -->
-      <div class="cand-section">
-        <div class="cand-heading">
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-            <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
-            <polyline points="14 2 14 8 20 8" />
-            <line x1="16" y1="13" x2="8" y2="13" />
-            <line x1="16" y1="17" x2="8" y2="17" />
-            <polyline points="10 9 9 9 8 9" />
-          </svg>
-          本窗排队候选 (单选投票)
-        </div>
-        <div id="candidates-container"></div>
-      </div>
-
-      <!-- 技术栈竞选表单 (燃料 / 模型 / Harness / 7×24 环境，含 Cursor 级联) -->
-      <form id="vote-form" class="stack-vote-form">
-        <div class="stack-vote-cols">
-          <!-- 燃料 Fuel -->
-          <fieldset class="vote-col">
-            <div class="vote-col-legend">
-              <span>燃料 (Fuel)</span>
-              <span class="vote-col-badge">主力方案</span>
-            </div>
-            <div id="fuel-choices"></div>
-          </fieldset>
-
-          <!-- 驱动模型 Model (重点：Cursor系仅Grok/Composer可选，其余disabled) -->
-          <fieldset class="vote-col">
-            <div class="vote-col-legend">
-              <span>驱动模型 (Model)</span>
-              <span class="vote-col-badge" id="model-cascade-badge">级联约束</span>
-            </div>
-            <div id="model-choices"></div>
-          </fieldset>
-
-          <!-- 运行载体 Harness -->
-          <fieldset class="vote-col">
-            <div class="vote-col-legend">
-              <span>运行载体 (Harness)</span>
-              <span class="vote-col-badge">执行器</span>
-            </div>
-            <div id="harness-choices"></div>
-          </fieldset>
-
-          <!-- 7×24 环境 Environment -->
-          <fieldset class="vote-col">
-            <div class="vote-col-legend">
-              <span>7×24 环境</span>
-              <span class="vote-col-badge">云沙盒</span>
-            </div>
-            <div id="env-choices"></div>
-          </fieldset>
-        </div>
-
-        <div class="vote-action-bar">
-          <button type="submit" id="vote-submit-btn" class="vote-submit-btn">
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-              <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14" />
-              <polyline points="22 4 12 14.01 9 11.01" />
-            </svg>
-            提交本窗技术栈投票
-          </button>
-          <p class="vote-msg" id="vote-msg" aria-live="polite"></p>
+      <p class="ballot-ingest" id="ballot-ingest"></p>
+      <div class="ballot-cands" id="ballot-candidates"></div>
+      <form id="ballot-form" hidden>
+        <div class="ballot-stack" id="ballot-stack"></div>
+        <div class="ballot-actions">
+          <button class="ballot-submit" id="ballot-submit" type="submit">提交本窗投票</button>
+          <p class="ballot-hint">无需登录。同一公网 IP 每个投票窗只能投一次。</p>
         </div>
       </form>
-
-      <!-- 实时计票 HUD 与结算状态 -->
-      <div class="tallies-box" id="tallies-box" hidden>
-        <div class="tallies-head">
-          <h3 class="tallies-title" id="tallies-title">实时计票统计</h3>
-          <span class="brand-tag" id="tallies-count-tag">0 票</span>
-        </div>
-        <div class="tallies-grid" id="tallies-grid"></div>
-        <div class="tallies-winner" id="tallies-winner"></div>
-      </div>
+      <p class="ballot-status" id="ballot-status" aria-live="polite"></p>
+      <div class="ballot-tallies" id="ballot-tallies" hidden></div>
     </section>
 
-    <!-- 开发后：已交付演示列表 (Card List) -->
-    <section class="demos-section" aria-label="已上线演示列表">
-      <div class="demos-toolbar">
-        <div class="demos-title-group">
-          <h3>已交付静态演示 · 最新倒序</h3>
-          <p>从 X 书签直接长出来的可交互原型，纯前端静态一键试玩。</p>
-        </div>
-        <div class="search-box">
-          <svg class="search-icon" viewBox="0 0 24 24" fill="none" stroke-width="2">
-            <circle cx="11" cy="11" r="8" />
-            <line x1="21" y1="21" x2="16.65" y2="16.65" />
-          </svg>
-          <input type="search" id="demo-search" class="search-input" placeholder="筛选 slug、标题、技术栈…" autocomplete="off" />
-        </div>
-      </div>
-
-      <!-- 卡片网格 -->
-      <div class="cards-grid" id="cards-grid">
-        <!-- 静态后备内容（JS 加载后自动按 seen-bookmarks.json 倒序全量替换） -->
-        <article class="card">
-          <div class="card-top">
-            <span class="card-slug-badge">google-creator-kit</span>
-            <a class="card-origin-btn" href="https://x.com/GeekCatX/status/2099920497383440599" target="_blank" rel="noopener">原帖 ↗</a>
+    <!-- 静态后备：无脚本或无法读取 tracking 时仍可浏览。成功读取 JSON 后由脚本替换。 -->
+    <section class="grid" id="grid" aria-label="演示列表">
+      <article class="card" data-search="google-creator-kit google 创作者工具箱 google 创作者工具箱：7 种用法工位 google creator kit flow 批量做图、notebooklm 做 ppt，预算有限也能很香。 原帖把 flow 做图、notebooklm 做 ppt 和视频反推收成预算创作者的 7 种用法，适合钉成一张可点工位。 geekcatx 2099920497383440599 google ai pro · grok-4.6 google ai pro grok-4.6 cursor cloud agent cursor cloud agent 托管机">
+        <a class="card-body" href="apps/google-creator-kit/">
+          <span class="slug">google-creator-kit</span>
+          <h2>Google 创作者工具箱</h2>
+          <p>Flow 批量做图、NotebookLM 做 PPT，预算有限也能很香。</p>
+          <p class="rationale">原帖把 Flow 做图、NotebookLM 做 PPT 和视频反推收成预算创作者的 7 种用法，适合钉成一张可点工位。</p>
+          <div class="tags" aria-label="技术栈标签">
+            <span class="tag tag-fuel" title="燃料：Google AI Pro · grok-4.6" aria-label="燃料：Google AI Pro · grok-4.6">Google AI Pro · grok-4.6</span>
+            <span class="tag tag-harness" title="云端 harness：Cursor Cloud Agent" aria-label="云端 harness：Cursor Cloud Agent">Cursor Cloud Agent</span>
+            <span class="tag tag-env" title="7×24 环境：Cursor Cloud Agent 托管机" aria-label="7×24 环境：Cursor Cloud Agent 托管机">Cursor Cloud Agent 托管机</span>
           </div>
-          <div>
-            <h4 class="card-title">Google 创作者工具箱</h4>
-            <div class="card-rationale-box">
-              <span class="card-rationale-tag">立项理由 / rationaleZh</span>
-              <p class="card-rationale-text">原帖把 Flow 做图、NotebookLM 做 PPT 和视频反推收成预算创作者的 7 种用法，适合钉成一张可点工位。</p>
-            </div>
-            <div class="card-tags">
-              <span class="card-tag tag-fuel">Google AI Pro · grok-4.6</span>
-              <span class="card-tag tag-harness">Cursor Cloud Agent</span>
-              <span class="card-tag tag-env">Cursor Cloud Agent 托管机</span>
-            </div>
+        </a>
+        <a class="origin" href="https://x.com/GeekCatX/status/2099920497383440599" target="_blank" rel="noopener noreferrer">原帖</a>
+      </article>
+      <article class="card" data-search="gsap-canvas 审美三件套 审美三件套：product design × gsap × canvas ui product design + gsap + canvas ui gsap 编排 + canvas 流体玻璃 / 粒子揭幕。 btcqzy1 2099440427841597573 cursor ultra · grok-4.6 cursor ultra grok-4.6 cursor cloud agent cursor cloud agent 托管机">
+        <a class="card-body" href="apps/gsap-canvas/">
+          <span class="slug">gsap-canvas</span>
+          <h2>审美三件套</h2>
+          <p>GSAP 编排 + Canvas 流体玻璃 / 粒子揭幕。</p>
+          <div class="tags" aria-label="技术栈标签">
+            <span class="tag tag-fuel" title="燃料：Cursor Ultra · grok-4.6" aria-label="燃料：Cursor Ultra · grok-4.6">Cursor Ultra · grok-4.6</span>
+            <span class="tag tag-harness" title="云端 harness：Cursor Cloud Agent" aria-label="云端 harness：Cursor Cloud Agent">Cursor Cloud Agent</span>
+            <span class="tag tag-env" title="7×24 环境：Cursor Cloud Agent 托管机" aria-label="7×24 环境：Cursor Cloud Agent 托管机">Cursor Cloud Agent 托管机</span>
           </div>
-          <div class="card-bottom">
-            <span class="card-author-meta">@GeekCatX</span>
-            <a class="card-enter-btn" href="apps/google-creator-kit/">体验演示 ↗</a>
+        </a>
+        <a class="origin" href="https://x.com/BTCqzy1/status/2099440427841597573" target="_blank" rel="noopener noreferrer">原帖</a>
+      </article>
+      <article class="card" data-search="remotion-tear 撕纸最小片 codex+remotion 怀旧撕纸短片 报纸底、撕裂转场、六步剪辑思路。 xl_lottie 2099342984433324435 cursor ultra · grok-4.6 cursor ultra grok-4.6 cursor cloud agent cursor cloud agent 托管机">
+        <a class="card-body" href="apps/remotion-tear/">
+          <span class="slug">remotion-tear</span>
+          <h2>撕纸最小片</h2>
+          <p>报纸底、撕裂转场、六步剪辑思路。</p>
+          <div class="tags" aria-label="技术栈标签">
+            <span class="tag tag-fuel" title="燃料：Cursor Ultra · grok-4.6" aria-label="燃料：Cursor Ultra · grok-4.6">Cursor Ultra · grok-4.6</span>
+            <span class="tag tag-harness" title="云端 harness：Cursor Cloud Agent" aria-label="云端 harness：Cursor Cloud Agent">Cursor Cloud Agent</span>
+            <span class="tag tag-env" title="7×24 环境：Cursor Cloud Agent 托管机" aria-label="7×24 环境：Cursor Cloud Agent 托管机">Cursor Cloud Agent 托管机</span>
           </div>
-        </article>
-        <article class="card">
-          <div class="card-top">
-            <span class="card-slug-badge">gsap-canvas</span>
-            <a class="card-origin-btn" href="https://x.com/BTCqzy1/status/2099440427841597573" target="_blank" rel="noopener">原帖 ↗</a>
+        </a>
+        <a class="origin" href="https://x.com/xl_lottie/status/2099342984433324435" target="_blank" rel="noopener noreferrer">原帖</a>
+      </article>
+      <article class="card" data-search="llm-arch-3d 大模型架构 · 立体小卡 大模型架构立体小卡 注意力、归一化与混合专家，做成可旋转的 3d 迷你卡。 bbruceyuan 2098785251455877338 cursor ultra · grok-4.6 cursor ultra grok-4.6 cursor cloud agent cursor cloud agent 托管机">
+        <a class="card-body" href="apps/llm-arch-3d/">
+          <span class="slug">llm-arch-3d</span>
+          <h2>大模型架构 · 立体小卡</h2>
+          <p>注意力、归一化与混合专家，做成可旋转的 3D 迷你卡。</p>
+          <div class="tags" aria-label="技术栈标签">
+            <span class="tag tag-fuel" title="燃料：Cursor Ultra · grok-4.6" aria-label="燃料：Cursor Ultra · grok-4.6">Cursor Ultra · grok-4.6</span>
+            <span class="tag tag-harness" title="云端 harness：Cursor Cloud Agent" aria-label="云端 harness：Cursor Cloud Agent">Cursor Cloud Agent</span>
+            <span class="tag tag-env" title="7×24 环境：Cursor Cloud Agent 托管机" aria-label="7×24 环境：Cursor Cloud Agent 托管机">Cursor Cloud Agent 托管机</span>
           </div>
-          <div>
-            <h4 class="card-title">审美三件套</h4>
-            <div class="card-rationale-box">
-              <span class="card-rationale-tag">立项理由 / rationaleZh</span>
-              <p class="card-rationale-text">前端审美三件套：GSAP编排与Canvas流体玻璃结合，打破AI页面单调感。</p>
-            </div>
-            <div class="card-tags">
-              <span class="card-tag tag-fuel">Cursor Ultra · grok-4.6</span>
-              <span class="card-tag tag-harness">Cursor Cloud Agent</span>
-              <span class="card-tag tag-env">Cloud Agent 托管机</span>
-            </div>
+        </a>
+        <a class="origin" href="https://x.com/bbruceyuan/status/2098785251455877338" target="_blank" rel="noopener noreferrer">原帖</a>
+      </article>
+      <article class="card" data-search="clapper clapper clapper 开场页：用 react 写片子，渲成 mp4 clapper intro: write videos in react, render to mp4 用 react 写片子、渲成 mp4，像片场一样审片。 kunchenguid 2099627078660624419 cursor ultra · grok-4.6 cursor ultra grok-4.6 cursor cloud agent cursor cloud agent 托管机">
+        <a class="card-body" href="apps/clapper/">
+          <span class="slug">clapper</span>
+          <h2>Clapper</h2>
+          <p>用 React 写片子、渲成 MP4，像片场一样审片。</p>
+          <div class="tags" aria-label="技术栈标签">
+            <span class="tag tag-fuel" title="燃料：Cursor Ultra · grok-4.6" aria-label="燃料：Cursor Ultra · grok-4.6">Cursor Ultra · grok-4.6</span>
+            <span class="tag tag-harness" title="云端 harness：Cursor Cloud Agent" aria-label="云端 harness：Cursor Cloud Agent">Cursor Cloud Agent</span>
+            <span class="tag tag-env" title="7×24 环境：Cursor Cloud Agent 托管机" aria-label="7×24 环境：Cursor Cloud Agent 托管机">Cursor Cloud Agent 托管机</span>
           </div>
-          <div class="card-bottom">
-            <span class="card-author-meta">@BTCqzy1</span>
-            <a class="card-enter-btn" href="apps/gsap-canvas/">体验演示 ↗</a>
+        </a>
+        <a class="origin" href="https://x.com/kunchenguid/status/2099627078660624419" target="_blank" rel="noopener noreferrer">原帖</a>
+      </article>
+      <article class="card" data-search="obsidian-ui obsidian ui 组件库 obsidianui react/tailwind 组件库 obsidianui react/tailwind component library 少把时间耗在反复调界面，把精力留给真正能上线的东西。 dhruvtwt_ 2099548790470640118 cursor ultra · grok-4.6 cursor ultra grok-4.6 cursor cloud agent cursor cloud agent 托管机">
+        <a class="card-body" href="apps/obsidian-ui/">
+          <span class="slug">obsidian-ui</span>
+          <h2>Obsidian UI 组件库</h2>
+          <p>少把时间耗在反复调界面，把精力留给真正能上线的东西。</p>
+          <div class="tags" aria-label="技术栈标签">
+            <span class="tag tag-fuel" title="燃料：Cursor Ultra · grok-4.6" aria-label="燃料：Cursor Ultra · grok-4.6">Cursor Ultra · grok-4.6</span>
+            <span class="tag tag-harness" title="云端 harness：Cursor Cloud Agent" aria-label="云端 harness：Cursor Cloud Agent">Cursor Cloud Agent</span>
+            <span class="tag tag-env" title="7×24 环境：Cursor Cloud Agent 托管机" aria-label="7×24 环境：Cursor Cloud Agent 托管机">Cursor Cloud Agent 托管机</span>
           </div>
-        </article>
-      </div>
+        </a>
+        <a class="origin" href="https://x.com/dhruvtwt_/status/2099548790470640118" target="_blank" rel="noopener noreferrer">原帖</a>
+      </article>
     </section>
 
-    <!-- 军火库三层架构 (Fuel / Harness / Environment) -->
-    <section class="arsenal-section" id="arsenal-section" hidden aria-label="技术军火库三层架构">
-      <div class="arsenal-top">
-        <p class="arsenal-top-kicker">ARSENAL ARCHITECTURE</p>
-        <h3 class="arsenal-top-title">技术弹药库 · 当前在用</h3>
-        <p class="arsenal-top-desc">
-          支撑高频无人值守交付的三层弹药库。仅 active 启用项参与轮转竞选，planned 规划项仅作演进储备。
-        </p>
+    <section class="arsenal-wrap" id="arsenal" hidden aria-label="军火库 · 当前在用">
+      <div class="arsenal-header">
+        <div>
+          <p class="kicker">技术弹药库</p>
+          <h2 class="arsenal-title">军火库 · 当前在用</h2>
+        </div>
+        <p class="arsenal-lede">日常支撑高频交付的燃料模型、执行 Harness 与 7×24 常驻环境。</p>
       </div>
-      <div class="arsenal-3tiers" id="arsenal-3tiers"></div>
+      <div class="arsenal-grid" id="arsenal-grid"></div>
     </section>
 
-    <!-- 底部信息 -->
     <footer>
-      <div>
-        <span>静态枢纽驱动 · 数据来自 <code>tracking/*.json</code></span>
-        <span style="margin: 0 0.5rem;">·</span>
-        <span>轮转基座 <a href="https://github.com/Chener/bookmark-demo-lab" target="_blank" rel="noopener">GitHub 仓库</a></span>
-      </div>
-      <div id="footer-update-time">上海时区 7×24 自动化轮转</div>
+      卡片来自 <code>tracking/seen-bookmarks.json</code>，按处理时间倒序。
+      待投票来自 <code>tracking/ballot-window.json</code>。
+      固定路径 <code>/apps/&lt;slug&gt;/</code>。
     </footer>
   </div>
-
-  <!-- 背景交互 Canvas 动画 (极简高性能 60fps) -->
   <script>
     (function () {
-      const canvas = document.getElementById("bg-canvas");
-      if (!canvas) return;
-      const ctx = canvas.getContext("2d");
-      let w = canvas.width = window.innerWidth;
-      let h = canvas.height = window.innerHeight;
+      const TRACKING = new URL("./tracking/seen-bookmarks.json", window.location.href);
+      const grid = document.getElementById("grid");
+      const status = document.getElementById("status");
+      const banner = document.getElementById("banner");
+      const filter = document.getElementById("filter");
+      let catalog = null;
 
-      const particles = [];
-      const COUNT = Math.min(36, Math.floor(w / 35));
-      for (let i = 0; i < COUNT; i++) {
-        particles.push({
-          x: Math.random() * w,
-          y: Math.random() * h,
-          vx: (Math.random() - 0.5) * 0.4,
-          vy: (Math.random() - 0.5) * 0.4,
-          radius: Math.random() * 1.5 + 0.8,
-          alpha: Math.random() * 0.35 + 0.1
-        });
+      function normalize(s) {
+        return String(s || "").toLowerCase().trim();
       }
 
-      window.addEventListener("resize", function () {
-        w = canvas.width = window.innerWidth;
-        h = canvas.height = window.innerHeight;
-      });
-
-      function render() {
-        ctx.clearRect(0, 0, w, h);
-        for (let i = 0; i < particles.length; i++) {
-          const p = particles[i];
-          p.x += p.vx;
-          p.y += p.vy;
-          if (p.x < 0) p.x = w;
-          if (p.x > w) p.x = 0;
-          if (p.y < 0) p.y = h;
-          if (p.y > h) p.y = 0;
-
-          ctx.beginPath();
-          ctx.arc(p.x, p.y, p.radius, 0, Math.PI * 2);
-          ctx.fillStyle = "rgba(56, 189, 248, " + p.alpha + ")";
-          ctx.fill();
-
-          for (let j = i + 1; j < particles.length; j++) {
-            const p2 = particles[j];
-            const dx = p.x - p2.x;
-            const dy = p.y - p2.y;
-            const dist = Math.sqrt(dx * dx + dy * dy);
-            if (dist < 110) {
-              ctx.beginPath();
-              ctx.moveTo(p.x, p.y);
-              ctx.lineTo(p2.x, p2.y);
-              ctx.strokeStyle = "rgba(142, 176, 255, " + (0.12 * (1 - dist / 110)) + ")";
-              ctx.lineWidth = 0.7;
-              ctx.stroke();
-            }
-          }
-        }
-        requestAnimationFrame(render);
-      }
-      requestAnimationFrame(render);
-    })();
-  </script>
-
-  <!-- Hub v2 核心逻辑 (本窗倒计时 / 级联 / 隐藏无候选 / rationaleZh) -->
-  <script>
-    (function () {
-      const FP_STORAGE_KEY = "bdl_fingerprint";
-      const receiptKey = function (wid) { return "bdl_receipt_" + wid; };
-
-      // 预置默认驱动模型选项清单
-      const MODEL_CATALOG = [
-        { id: "grok-4.6", name: "grok-4.6", note: "Cursor主力推荐", isCursor: true },
-        { id: "composer-2.5", name: "composer-2.5", note: "Cursor原生架构", isCursor: true },
-        { id: "claude-3.7-sonnet", name: "claude-3.7", note: "Anthropic前沿", isCursor: false },
-        { id: "gemini-2.0-flash", name: "gemini-2.0", note: "Google AI Pro专署", isCursor: false },
-        { id: "deepseek-r1", name: "deepseek-r1", note: "OpenRouter开源前沿", isCursor: false }
-      ];
-
-      const WINDOW_POLL_MS = 20000;
-
-      const state = {
-        config: null,
-        window: null,
-        arsenal: null,
-        ledger: null,
-        bookmarks: [],
-        submitting: false,
-        countdownTimer: null,
-        watchMode: null,
-        countdownClosesMs: null,
-        windowRefreshing: false,
-        lastWindowPollAt: 0,
-        cascadeBound: false,
-        searchBound: false
-      };
-
-      // 工具函数
-      function safeUrl(u) {
+      function safeHttpUrl(value) {
         try {
-          const url = new URL(u);
+          const url = new URL(value);
           if (url.protocol === "https:" || url.protocol === "http:") return url.href;
         } catch (_) {}
         return "";
       }
 
-      function getFingerprint() {
-        try {
-          let fp = localStorage.getItem(FP_STORAGE_KEY);
-          if (!fp) {
-            fp = (crypto.randomUUID && crypto.randomUUID()) ||
-                 ("fp-" + Math.random().toString(36).slice(2) + Date.now().toString(36));
-            localStorage.setItem(FP_STORAGE_KEY, fp);
+      function demoHref(item) {
+        const raw = item && (item.path || (item.slug ? "/apps/" + item.slug + "/" : ""));
+        if (!raw) return "#";
+        return String(raw).replace(/^\//, "");
+      }
+
+      function shortTitle(item) {
+        if (item && item.hubTitle) return String(item.hubTitle);
+        const raw = (item && (item.titleZh || item.title || item.slug)) || "未命名演示";
+        const cut = String(raw).split(/[：:]/)[0].trim();
+        return cut || raw;
+      }
+
+      function stackTags(item) {
+        if (!item) return [];
+        const tags = [];
+        const sub = String(item.subscriptionZh || item.subscription || "").trim();
+        const model = String(item.modelZh || item.model || "").trim();
+        let fuel = String(item.fuelZh || item.fuel || "").trim();
+        if (!fuel) {
+          if (sub && model) {
+            fuel = sub + " · " + model;
+          } else if (sub) {
+            fuel = sub;
+          } else if (model) {
+            fuel = model;
           }
-          return fp;
+        }
+        if (fuel) tags.push({ kind: "fuel", label: "燃料", value: fuel });
+
+        const harness = String(item.harnessZh || item.harness || "").trim();
+        if (harness) tags.push({ kind: "harness", label: "云端 harness", value: harness });
+
+        const env = String(
+          item.environmentZh || item.environment || item.cloudZh || item.cloud || ""
+        ).trim();
+        if (env) tags.push({ kind: "env", label: "7×24 环境", value: env });
+
+        return tags;
+      }
+
+      function haystack(item) {
+        if (!item) return "";
+        const tagValues = stackTags(item).map(function (t) { return t.value; });
+        return [
+          item.slug,
+          item.hubTitle,
+          item.titleZh,
+          item.title,
+          item.blurbZh,
+          item.rationaleZh,
+          item.author,
+          item.id,
+          item.subscriptionZh,
+          item.subscription,
+          item.modelZh,
+          item.model,
+          item.fuelZh,
+          item.fuel,
+          item.harnessZh,
+          item.harness,
+          item.environmentZh,
+          item.environment,
+          item.cloudZh,
+          item.cloud
+        ].concat(tagValues).map(normalize).join(" ");
+      }
+
+      function newestFirst(items) {
+        return items
+          .map(function (item, index) { return { item: item, index: index }; })
+          .sort(function (a, b) {
+            const ta = Date.parse(a.item && a.item.processedAt) || 0;
+            const tb = Date.parse(b.item && b.item.processedAt) || 0;
+            if (tb !== ta) return tb - ta;
+            return a.index - b.index;
+          })
+          .map(function (row) { return row.item; });
+      }
+
+      function cardEl(item) {
+        const article = document.createElement("article");
+        article.className = "card";
+        article.dataset.search = haystack(item);
+
+        const body = document.createElement("a");
+        body.className = "card-body";
+        body.href = demoHref(item);
+
+        const slug = document.createElement("span");
+        slug.className = "slug";
+        slug.textContent = item.slug || "—";
+
+        const h2 = document.createElement("h2");
+        h2.textContent = shortTitle(item);
+
+        body.append(slug, h2);
+        if (item.blurbZh) {
+          const p = document.createElement("p");
+          p.textContent = item.blurbZh;
+          body.append(p);
+        }
+        if (item.rationaleZh) {
+          const why = document.createElement("p");
+          why.className = "rationale";
+          why.textContent = item.rationaleZh;
+          body.append(why);
+        }
+
+        const tags = stackTags(item);
+        if (tags.length) {
+          const tagsEl = document.createElement("div");
+          tagsEl.className = "tags";
+          tagsEl.setAttribute("aria-label", "技术栈标签");
+          tags.forEach(function (t) {
+            const span = document.createElement("span");
+            span.className = "tag tag-" + t.kind;
+            span.textContent = t.value;
+            span.title = t.label + "：" + t.value;
+            span.setAttribute("aria-label", t.label + "：" + t.value);
+            tagsEl.append(span);
+          });
+          body.append(tagsEl);
+        }
+
+        article.append(body);
+
+        const originUrl = safeHttpUrl(item.url);
+        if (originUrl) {
+          const origin = document.createElement("a");
+          origin.className = "origin";
+          origin.href = originUrl;
+          origin.target = "_blank";
+          origin.rel = "noopener noreferrer";
+          origin.textContent = "原帖";
+          origin.setAttribute("aria-label", "打开「" + shortTitle(item) + "」的原帖");
+          article.append(origin);
+        }
+
+        return article;
+      }
+
+      function visibleFallbackCards() {
+        return Array.prototype.slice.call(grid.querySelectorAll(".card"));
+      }
+
+      function applyFilter() {
+        const q = normalize(filter.value);
+        if (catalog) {
+          const shown = q ? catalog.filter(function (item) {
+            return haystack(item).indexOf(q) !== -1;
+          }) : catalog;
+          grid.replaceChildren();
+          if (!shown.length) {
+            const empty = document.createElement("p");
+            empty.className = "empty";
+            empty.textContent = catalog.length ? "没有匹配的演示" : "暂无演示";
+            grid.append(empty);
+          } else {
+            shown.forEach(function (item) { grid.append(cardEl(item)); });
+          }
+          status.textContent = !catalog.length
+            ? "暂无演示"
+            : q
+              ? shown.length + " / " + catalog.length + " 个演示"
+              : catalog.length + " 个演示";
+          return;
+        }
+        const cards = visibleFallbackCards();
+        let n = 0;
+        cards.forEach(function (card) {
+          const hit = !q || (card.dataset.search || "").indexOf(q) !== -1;
+          card.hidden = !hit;
+          if (hit) n += 1;
+        });
+        status.textContent = q ? n + " / " + cards.length + " 个演示" : cards.length + " 个演示";
+      }
+
+      filter.addEventListener("input", applyFilter);
+
+      fetch(TRACKING.href, { cache: "no-store" })
+        .then(function (res) {
+          if (!res.ok) throw new Error("HTTP " + res.status);
+          return res.json();
+        })
+        .then(function (data) {
+          const items = Array.isArray(data && data.items) ? data.items : [];
+          catalog = newestFirst(items.filter(function (item) {
+            return item && (item.slug || item.path);
+          }));
+          banner.hidden = true;
+          applyFilter();
+        })
+        .catch(function () {
+          const fileProto = window.location.protocol === "file:";
+          banner.hidden = false;
+          banner.textContent = fileProto
+            ? "无法读取追踪记录。请用本地静态服务打开本页，例如 python3 -m http.server 4173"
+            : "无法读取 tracking/seen-bookmarks.json，已显示页面内后备列表。";
+          applyFilter();
+        });
+
+      // 军火库加载与渲染（软失败：文件不存在或异常时保持隐藏）
+      const ARSENAL_URL = new URL("./tracking/arsenal.json", window.location.href);
+      const arsenalEl = document.getElementById("arsenal");
+      const arsenalGrid = document.getElementById("arsenal-grid");
+
+      if (arsenalEl && arsenalGrid) {
+        fetch(ARSENAL_URL.href, { cache: "no-store" })
+          .then(function (res) {
+            if (!res.ok) throw new Error("HTTP " + res.status);
+            return res.json();
+          })
+          .then(function (data) {
+            const sections = Array.isArray(data && data.sections) ? data.sections : [];
+            if (!sections.length) return;
+            arsenalGrid.replaceChildren();
+
+            sections.forEach(function (sec) {
+              const col = document.createElement("article");
+              col.className = "arsenal-col";
+
+              const head = document.createElement("header");
+              head.className = "arsenal-col-header";
+
+              const h3 = document.createElement("h3");
+              h3.className = "arsenal-col-title";
+              h3.textContent = sec.titleZh || sec.id || "分组";
+
+              head.append(h3);
+              if (sec.blurbZh) {
+                const b = document.createElement("p");
+                b.className = "arsenal-col-blurb";
+                b.textContent = sec.blurbZh;
+                head.append(b);
+              }
+              col.append(head);
+
+              const ul = document.createElement("ul");
+              ul.className = "arsenal-list";
+
+              const items = Array.isArray(sec.items) ? sec.items : [];
+              items.forEach(function (it) {
+                const li = document.createElement("li");
+                const isPlanned = it.status === "planned";
+                li.className = "arsenal-item" + (isPlanned ? " is-planned" : "");
+
+                const topRow = document.createElement("div");
+                topRow.className = "arsenal-item-top";
+
+                const name = document.createElement("span");
+                name.className = "arsenal-item-name";
+                name.textContent = it.nameZh || it.name || "未命名";
+
+                const badge = document.createElement("span");
+                badge.className = "arsenal-badge " + (isPlanned ? "status-planned" : "status-active");
+                badge.textContent = isPlanned ? "规划中" : "启用";
+
+                topRow.append(name, badge);
+                li.append(topRow);
+
+                if (it.noteZh) {
+                  const note = document.createElement("span");
+                  note.className = "arsenal-item-note";
+                  note.textContent = it.noteZh;
+                  li.append(note);
+                }
+
+                ul.append(li);
+              });
+
+              col.append(ul);
+              arsenalGrid.append(col);
+            });
+
+            arsenalEl.hidden = false;
+          })
+          .catch(function () {
+            arsenalEl.hidden = true;
+          });
+      }
+    })();
+  </script>
+  <script>
+    (function () {
+      const ballotEl = document.getElementById("ballot");
+      const metaEl = document.getElementById("ballot-meta");
+      const ingestEl = document.getElementById("ballot-ingest");
+      const candsEl = document.getElementById("ballot-candidates");
+      const formEl = document.getElementById("ballot-form");
+      const stackEl = document.getElementById("ballot-stack");
+      const submitBtn = document.getElementById("ballot-submit");
+      const statusEl = document.getElementById("ballot-status");
+      const talliesEl = document.getElementById("ballot-tallies");
+      if (!ballotEl || !formEl) return;
+
+      const FP_KEY = "bdl-vote-fp";
+      const receiptKey = function (windowId) { return "bdl-vote-receipt:" + windowId; };
+      const LABELS = { fuel: "燃料", harness: "Harness", environment: "7×24" };
+      let state = {
+        config: null,
+        ballot: null,
+        arsenal: null,
+        ledger: null,
+        apiOk: false,
+        submitting: false
+      };
+
+      function safeHttpUrl(value) {
+        try {
+          const url = new URL(value);
+          if (url.protocol === "https:" || url.protocol === "http:") return url.href;
+        } catch (_) {}
+        return "";
+      }
+
+      function setStatus(text, kind) {
+        statusEl.textContent = text || "";
+        if (kind) statusEl.setAttribute("data-kind", kind);
+        else statusEl.removeAttribute("data-kind");
+      }
+
+      function fingerprint() {
+        try {
+          let id = localStorage.getItem(FP_KEY);
+          if (!id) {
+            id = (crypto.randomUUID && crypto.randomUUID()) ||
+              ("fp-" + Math.random().toString(36).slice(2) + Date.now().toString(36));
+            localStorage.setItem(FP_KEY, id);
+          }
+          return id;
         } catch (_) {
-          return "fp-fallback-" + Math.random().toString(36).slice(2);
+          return "";
         }
       }
 
-      function formatClock(iso) {
-        if (!iso) return "—";
+      function activeFromArsenal(arsenal) {
+        const out = { fuel: [], harness: [], environment: [] };
+        const sections = arsenal && Array.isArray(arsenal.sections) ? arsenal.sections : [];
+        sections.forEach(function (sec) {
+          if (!out[sec.id]) return;
+          (Array.isArray(sec.items) ? sec.items : []).forEach(function (it) {
+            if (!it || it.status !== "active") return;
+            const name = String(it.nameZh || it.name || "").trim();
+            if (name) out[sec.id].push(name);
+          });
+        });
+        return out;
+      }
+
+      function votableOptions() {
+        const fromArsenal = activeFromArsenal(state.arsenal);
+        const fallback = (state.ballot && state.ballot.options) || {};
+        function pick(kind) {
+          return fromArsenal[kind] && fromArsenal[kind].length ? fromArsenal[kind] : (fallback[kind] || []);
+        }
+        return { fuel: pick("fuel"), harness: pick("harness"), environment: pick("environment") };
+      }
+
+      function voteUrl(windowId) {
+        const base = String(state.config && state.config.voteApiBase || "").trim().replace(/\/$/, "");
+        const path = "/api/vote";
+        const root = base ? base + path : path;
+        if (windowId) return root + "?windowId=" + encodeURIComponent(windowId);
+        return root;
+      }
+
+      function shanghaiClock(iso) {
         try {
-          return new Date(iso).toLocaleTimeString("zh-CN", {
+          return new Date(iso).toLocaleString("zh-CN", {
             timeZone: "Asia/Shanghai",
-            hour12: false,
+            month: "2-digit",
+            day: "2-digit",
             hour: "2-digit",
-            minute: "2-digit"
+            minute: "2-digit",
+            hour12: false
           });
         } catch (_) {
           return iso;
         }
       }
 
-      function formatCountdownDigits(seconds) {
-        const s = Math.max(0, Math.floor(seconds));
-        const m = Math.floor(s / 60);
-        const sec = s % 60;
-        return String(m).padStart(2, "0") + ":" + String(sec).padStart(2, "0");
-      }
-
-      function formatWindowCountdownLabel(opensMs, closesMs) {
-        const durationMs = closesMs - opensMs;
-        if (!Number.isFinite(durationMs) || durationMs <= 0) return "本窗倒计时";
-        const minutes = Math.round(durationMs / 60000);
-        if (minutes <= 15) return "本窗倒计时（约" + Math.max(1, minutes) + "分钟）";
-        return "本窗倒计时";
-      }
-
-      function windowFingerprint(win) {
-        if (!win) return "";
-        const ids = (Array.isArray(win.candidates) ? win.candidates : [])
-          .map(function (c) { return (c && c.id) + ":" + (c && c.status); })
-          .join(",");
-        return [win.windowId || "", win.opensAt || "", win.closesAt || "", ids].join("|");
-      }
-
-      function stopWindowWatch() {
-        if (state.countdownTimer) {
-          clearInterval(state.countdownTimer);
-          state.countdownTimer = null;
-        }
-        state.watchMode = null;
-        state.countdownClosesMs = null;
-      }
-
-      function clearSubmitState() {
-        state.submitting = false;
-        const btn = document.getElementById("vote-submit-btn");
-        const msg = document.getElementById("vote-msg");
-        if (btn) btn.disabled = true;
-        if (msg) {
-          msg.textContent = "";
-          msg.removeAttribute("data-kind");
-        }
-      }
-
-      function voteApiBase() {
-        return String(state.config && state.config.voteApiBase || "").trim().replace(/\/$/, "");
-      }
-
-      function setStackPill(el, label, value) {
-        if (!el) return;
-        el.replaceChildren();
-        const b = document.createElement("b");
-        b.textContent = label;
-        el.append(b, document.createTextNode(value == null ? "" : String(value)));
-      }
-
-      async function refreshLiveWindow() {
-        if (state.windowRefreshing) return;
-        state.windowRefreshing = true;
-        state.lastWindowPollAt = Date.now();
-        try {
-          const winData = await loadWindow(voteApiBase());
-          const prev = windowFingerprint(state.window);
-          const next = windowFingerprint(winData);
-          state.window = winData;
-          if (prev !== next) {
-            renderPipelineStrip();
-            renderVotePanel();
-          }
-        } catch (err) {
-          console.warn("轻量轮询 /api/window 失败:", err);
-        } finally {
-          state.windowRefreshing = false;
-        }
-      }
-
-      // 1. 加载配置与初始数据
-      async function loadAllData() {
-        // 先读本地 rotate-config.json 获取 voteApiBase
-        try {
-          const cfgRes = await fetch("./tracking/rotate-config.json", { cache: "no-store" });
-          if (cfgRes.ok) state.config = await cfgRes.json();
-        } catch (e) {
-          console.warn("读取 rotate-config.json 失败:", e);
-        }
-
-        const apiBase = String(state.config && state.config.voteApiBase || "").trim().replace(/\/$/, "");
-
-        // 并行加载 window (优先 live /api/window)、arsenal、ledger、seen-bookmarks
-        const promises = [
-          loadWindow(apiBase),
-          fetchJson("./tracking/arsenal.json").catch(() => null),
-          fetchJson("./tracking/seen-bookmarks.json").catch(() => null),
-          loadLedger(apiBase)
-        ];
-
-        const [winData, arsenalData, bookmarksData, ledgerData] = await Promise.all(promises);
-        state.window = winData;
-        state.arsenal = arsenalData;
-        state.bookmarks = (bookmarksData && bookmarksData.items) ? bookmarksData.items : [];
-        state.ledger = ledgerData;
-
-        renderAll();
-      }
-
-      async function fetchJson(url) {
-        const res = await fetch(url, { cache: "no-store" });
-        if (!res.ok) throw new Error("HTTP " + res.status);
-        return res.json();
-      }
-
-      // live /api/window 可达时其否定响应为权威（404 missing_window / ok:false / 无 window → null，隐藏投票）
-      // 仅在 apiBase 为空，或 live fetch 抛错/网络失败时，才降级 tracking/ballot-window.json
-      async function loadWindow(apiBase) {
-        if (apiBase) {
-          try {
-            const liveRes = await fetch(apiBase + "/api/window", { cache: "no-store" });
-            let liveData = null;
-            try {
-              liveData = await liveRes.json();
-            } catch (_) {
-              liveData = null;
-            }
-            if (liveData && liveData.ok && liveData.window) {
-              return liveData.window;
-            }
-            return null;
-          } catch (err) {
-            console.warn("Live /api/window 连接失败，降级本地:", err);
-          }
-        }
-        try {
-          return await fetchJson("./tracking/ballot-window.json");
-        } catch (e) {
-          console.warn("读取 ballot-window.json 失败:", e);
-          return null;
-        }
-      }
-
-      async function loadLedger(apiBase) {
-        if (apiBase) {
-          try {
-            const res = await fetch(apiBase + "/api/ledger", { cache: "no-store" });
-            if (res.ok) {
-              const data = await res.json();
-              if (data && data.ok && data.ledger) return data.ledger;
-            }
-          } catch (_) {}
-        }
-        try {
-          return await fetchJson("./tracking/vote-ledger.json");
-        } catch (_) {
-          return null;
-        }
-      }
-
-      // ===================================================
-      // 全局渲染主调度
-      // ===================================================
-      function renderAll() {
-        renderPipelineStrip();
-        renderVotePanel();
-        renderShippedCards();
-        renderArsenal();
-      }
-
-      // 渲染流水线状态条 (开发前 → 开发中 → 开发后)
-      function renderPipelineStrip() {
-        const win = state.window;
+      function windowOpen(ballot) {
         const now = Date.now();
-        const opens = win ? Date.parse(win.opensAt) : 0;
-        const closes = win ? Date.parse(win.closesAt) : 0;
-        const isOpen = Number.isFinite(opens) && Number.isFinite(closes) && now >= opens && now < closes;
-        const openCands = win && Array.isArray(win.candidates)
-          ? win.candidates.filter(c => c && c.status === "open")
-          : [];
-
-        const metaEl = document.getElementById("pipe-window-meta");
-        if (metaEl && win) {
-          metaEl.textContent = "窗 " + (win.windowId || "—") + " · 上海 " + formatClock(win.opensAt) + " → " + formatClock(win.closesAt);
-        }
-
-        // 阶段 1：开发前
-        const preTitle = document.getElementById("pipe-pre-title");
-        const preDesc = document.getElementById("pipe-pre-desc");
-        if (preTitle && preDesc) {
-          if (!isOpen) {
-            preTitle.textContent = "等待开启新窗";
-            preDesc.textContent = "本窗已封票，编排器正准备下一拍轮转";
-          } else if (!openCands.length) {
-            preTitle.textContent = "候选题库空闲";
-            preDesc.textContent = "暂无开放 X 书签待投，投票入口自动静默";
-          } else {
-            preTitle.textContent = openCands.length + " 个候选排队中";
-            preDesc.textContent = "短窗轮转竞投进行中，胜出者直进构建";
-          }
-        }
-
-        // 阶段 2：开发中 (显示胜出/当前技术栈)
-        const ledgerWin = state.ledger && state.ledger.winningStack;
-        if (ledgerWin) {
-          if (ledgerWin.fuel) setStackPill(document.getElementById("pipe-pill-fuel"), "燃料", ledgerWin.fuel);
-          if (ledgerWin.harness) setStackPill(document.getElementById("pipe-pill-harness"), "载体", ledgerWin.harness);
-          if (ledgerWin.environment) setStackPill(document.getElementById("pipe-pill-env"), "环境", ledgerWin.environment);
-        }
-
-        // 阶段 3：开发后
-        const postTitle = document.getElementById("pipe-post-title");
-        const postDesc = document.getElementById("pipe-post-desc");
-        const hudShipped = document.getElementById("hud-shipped-count");
-        const count = state.bookmarks.length;
-        if (hudShipped) hudShipped.textContent = "已上线 " + count + " 个 Demo";
-        if (postTitle) postTitle.textContent = count + " 个演示已上线";
-        if (postDesc && count > 0) {
-          const topOne = state.bookmarks[0];
-          postDesc.textContent = "最新：" + (topOne.hubTitle || topOne.titleZh || topOne.slug);
-        }
+        const opens = Date.parse(ballot.opensAt);
+        const closes = Date.parse(ballot.closesAt);
+        return Number.isFinite(opens) && Number.isFinite(closes) && now >= opens && now < closes;
       }
 
-      // ===================================================
-      // 投票面板渲染：本窗倒计时 + 无候选隐藏 + 级联限制
-      // ===================================================
-      function renderVotePanel() {
-        const panel = document.getElementById("vote-panel");
-        if (!panel) return;
-
-        const win = state.window;
-        if (!win) {
-          panel.hidden = true;
-          clearSubmitState();
-          startIdleWindowPoll();
+      function renderCandidates(ballot) {
+        candsEl.replaceChildren();
+        const list = (ballot.candidates || []).filter(function (c) {
+          return c && c.status === "open";
+        });
+        if (!list.length) {
+          const p = document.createElement("p");
+          p.className = "ballot-hint";
+          p.textContent = "本窗暂无书签候选（未伪造 X 帖）。仍可选择下方技术栈。";
+          candsEl.append(p);
           return;
         }
-
-        const now = Date.now();
-        const opens = Date.parse(win.opensAt);
-        const closes = Date.parse(win.closesAt);
-        const remainingSec = Number.isFinite(closes) ? Math.max(0, Math.floor((closes - now) / 1000)) : 0;
-        const isOpen = Number.isFinite(opens) && Number.isFinite(closes) && now >= opens && now < closes && remainingSec > 0;
-
-        const openCands = Array.isArray(win.candidates)
-          ? win.candidates.filter(c => c && c.status === "open")
-          : [];
-
-        const labelEl = document.getElementById("timer-hud-label-text");
-        if (labelEl) labelEl.textContent = formatWindowCountdownLabel(opens, closes);
-
-        // 核心规则：无候选或窗口关闭时隐藏投票区，但开窗空候选仍轻量轮询 live /api/window
-        if (!isOpen || openCands.length === 0) {
-          panel.hidden = true;
-          clearSubmitState();
-          if (isOpen) {
-            startCountdown(closes, opens, true);
-          } else {
-            startIdleWindowPoll();
-          }
-          return;
-        }
-
-        // 有候选且窗开，显示投票区
-        panel.hidden = false;
-        document.getElementById("vote-window-badge").textContent = "窗 " + (win.windowId || "");
-        if (win.ingestNoteZh) {
-          document.getElementById("vote-ingest-note").textContent = win.ingestNoteZh;
-        }
-
-        startCountdown(closes, opens, false);
-
-        // 渲染候选人列表 (含 rationaleZh)
-        renderCandidates(openCands);
-
-        // 渲染技术栈选择器 (燃料 / 模型 / Harness / 7×24) 并建立级联
-        renderStackSelectors();
-
-        // 检查本地投票回执
-        checkVoteReceipt(win.windowId);
-
-        // 拉取实时票数
-        loadLiveTallies(win.windowId);
-      }
-
-      function startIdleWindowPoll() {
-        if (state.watchMode === "idle" && state.countdownTimer) return;
-        stopWindowWatch();
-        state.watchMode = "idle";
-        state.countdownTimer = setInterval(refreshLiveWindow, WINDOW_POLL_MS);
-      }
-
-      // 本窗倒计时；pollLive 时复用 tick 轻量拉取 /api/window（开窗无候选）
-      function startCountdown(closesMs, opensMs, pollLive) {
-        const mode = pollLive ? "countdown-poll" : "countdown";
-        if (state.watchMode === mode && state.countdownTimer && state.countdownClosesMs === closesMs) {
-          return;
-        }
-        stopWindowWatch();
-        state.watchMode = mode;
-        state.countdownClosesMs = closesMs;
-        state.lastWindowPollAt = Date.now();
-
-        const digitsEl = document.getElementById("timer-digits");
-        const barEl = document.getElementById("timer-progress-bar");
-        const totalDuration = Math.max(1, (closesMs - opensMs) / 1000);
-
-        function tick() {
-          const remainingSec = Math.max(0, Math.floor((closesMs - Date.now()) / 1000));
-          if (digitsEl) digitsEl.textContent = formatCountdownDigits(remainingSec);
-
-          if (barEl) {
-            const pct = Math.min(100, Math.max(0, (remainingSec / totalDuration) * 100));
-            barEl.style.width = pct + "%";
-          }
-
-          if (pollLive && Date.now() - state.lastWindowPollAt >= WINDOW_POLL_MS) {
-            refreshLiveWindow();
-          }
-
-          if (remainingSec <= 0) {
-            stopWindowWatch();
-            if (digitsEl) digitsEl.textContent = "00:00";
-            Promise.resolve(loadAllData()).finally(function () {
-              if (!state.countdownTimer) startIdleWindowPoll();
-            });
-          }
-        }
-
-        tick();
-        state.countdownTimer = setInterval(tick, 1000);
-      }
-
-      // 渲染候选列表 (展示 rationaleZh)
-      function renderCandidates(candidates) {
-        const container = document.getElementById("candidates-container");
-        if (!container) return;
-        container.replaceChildren();
-
-        candidates.forEach((cand, idx) => {
-          const card = document.createElement("label");
-          card.className = "cand-card";
-
-          const radio = document.createElement("input");
-          radio.type = "radio";
-          radio.name = "candidateId";
-          radio.value = String(cand.id || "");
-          if (idx === 0) radio.checked = true;
-
+        list.forEach(function (c) {
+          const label = document.createElement("label");
+          label.className = "ballot-cand";
+          const input = document.createElement("input");
+          input.type = "radio";
+          input.name = "candidateId";
+          input.value = String(c.id || "");
           const body = document.createElement("div");
-          body.className = "cand-body";
-
-          const titleRow = document.createElement("div");
-          titleRow.className = "cand-title-row";
-          
-          const h3 = document.createElement("h3");
-          h3.className = "cand-title";
-          h3.textContent = cand.titleZh || cand.title || "未命名演示提案";
-          
-          const auth = document.createElement("span");
-          auth.className = "cand-author";
-          auth.textContent = cand.author ? "@" + cand.author : "";
-
-          titleRow.append(h3, auth);
-          body.append(titleRow);
-
-          // 核心展示：rationaleZh（textContent，禁止拼进 innerHTML）
-          const rationale = cand.rationaleZh || cand.planZh || "原帖核心交互直觉复刻，验证无人值守静态交付全链路。";
-          const ratBox = document.createElement("div");
-          ratBox.className = "rationale-strip";
-          const ratTag = document.createElement("span");
-          ratTag.className = "rationale-tag";
-          ratTag.textContent = "立项理由 / rationaleZh";
-          const ratText = document.createElement("p");
-          ratText.className = "rationale-text";
-          ratText.textContent = rationale;
-          ratBox.append(ratTag, ratText);
-          body.append(ratBox);
-
-          if (cand.planZh && cand.planZh !== rationale) {
-            const planP = document.createElement("p");
-            planP.className = "cand-plan";
-            planP.textContent = cand.planZh;
-            body.append(planP);
+          const title = document.createElement("p");
+          title.className = "ballot-cand-title";
+          title.textContent = c.titleZh || c.id || "未命名候选";
+          body.append(title);
+          if (c.author) {
+            const a = document.createElement("p");
+            a.className = "ballot-cand-author";
+            a.textContent = "@" + c.author;
+            body.append(a);
           }
-
-          const originHref = safeUrl(cand.url);
-          if (originHref) {
-            const originLink = document.createElement("a");
-            originLink.className = "cand-origin-link";
-            originLink.href = originHref;
-            originLink.target = "_blank";
-            originLink.rel = "noopener";
-            originLink.textContent = "查看 X 原帖 ↗";
-            body.append(originLink);
+          if (c.planZh) {
+            const plan = document.createElement("p");
+            plan.className = "ballot-plan";
+            plan.textContent = c.planZh;
+            body.append(plan);
           }
-
-          card.append(radio, body);
-          container.append(card);
+          const originUrl = safeHttpUrl(c.url);
+          if (originUrl) {
+            const origin = document.createElement("a");
+            origin.className = "origin";
+            origin.style.position = "static";
+            origin.style.display = "inline-flex";
+            origin.style.marginTop = "0.25rem";
+            origin.href = originUrl;
+            origin.target = "_blank";
+            origin.rel = "noopener noreferrer";
+            origin.textContent = "原帖";
+            body.append(origin);
+          }
+          label.append(input, body);
+          candsEl.append(label);
         });
       }
 
-      // 获取军火库 active 项
-      function getActiveArsenalSets() {
-        const out = { fuel: [], harness: [], environment: [] };
-        if (!state.arsenal || !Array.isArray(state.arsenal.sections)) return out;
-        state.arsenal.sections.forEach(sec => {
-          if (!out[sec.id]) return;
-          (sec.items || []).forEach(it => {
-            if (it && it.status === "active") {
-              const name = String(it.nameZh || it.name || "").trim();
-              if (name) out[sec.id].push(name);
-            }
+      function renderStack(options) {
+        stackEl.replaceChildren();
+        ["fuel", "harness", "environment"].forEach(function (kind) {
+          const fs = document.createElement("fieldset");
+          fs.className = "ballot-col";
+          const legend = document.createElement("legend");
+          legend.textContent = LABELS[kind];
+          fs.append(legend);
+          (options[kind] || []).forEach(function (name) {
+            const lab = document.createElement("label");
+            lab.className = "ballot-choice";
+            const input = document.createElement("input");
+            input.type = "radio";
+            input.name = kind;
+            input.value = name;
+            input.required = true;
+            const span = document.createElement("span");
+            span.textContent = name;
+            lab.append(input, span);
+            fs.append(lab);
           });
-        });
-        return out;
-      }
-
-      // 渲染技术栈选择器
-      function renderStackSelectors() {
-        const arsenalActive = getActiveArsenalSets();
-        const winOpts = (state.window && state.window.options) || {};
-
-        const fuels = arsenalActive.fuel.length ? arsenalActive.fuel : (winOpts.fuel || ["Cursor Ultra"]);
-        const harnesses = arsenalActive.harness.length ? arsenalActive.harness : (winOpts.harness || ["Cursor Cloud Agent"]);
-        const envs = arsenalActive.environment.length ? arsenalActive.environment : (winOpts.environment || ["Cursor Cloud Agent 托管机"]);
-
-        renderChoiceGroup("fuel-choices", "fuel", fuels, fuels[0]);
-        renderChoiceGroup("harness-choices", "harness", harnesses, harnesses[0]);
-        renderChoiceGroup("env-choices", "environment", envs, envs[0]);
-
-        // 渲染驱动模型选择组
-        renderModelChoices();
-
-        // 绑定级联限制事件
-        bindCascadingConstraints();
-      }
-
-      function renderChoiceGroup(containerId, groupName, items, defaultVal) {
-        const box = document.getElementById(containerId);
-        if (!box) return;
-        box.replaceChildren();
-
-        items.forEach((item, idx) => {
-          const lab = document.createElement("label");
-          lab.className = "choice-label";
-
-          const inp = document.createElement("input");
-          inp.type = "radio";
-          inp.name = groupName;
-          inp.value = item;
-          if (item === defaultVal || (!defaultVal && idx === 0)) inp.checked = true;
-
-          const wrap = document.createElement("div");
-          const title = document.createElement("span");
-          title.className = "choice-title";
-          title.textContent = item;
-          wrap.append(title);
-
-          lab.append(inp, wrap);
-          box.append(lab);
+          stackEl.append(fs);
         });
       }
 
-      function renderModelChoices() {
-        const box = document.getElementById("model-choices");
-        if (!box) return;
-        box.replaceChildren();
-
-        MODEL_CATALOG.forEach((m, idx) => {
-          const lab = document.createElement("label");
-          lab.className = "choice-label";
-          lab.dataset.modelId = m.id;
-
-          const inp = document.createElement("input");
-          inp.type = "radio";
-          inp.name = "model";
-          inp.value = m.id;
-          if (idx === 0) inp.checked = true;
-
-          const body = document.createElement("div");
-          const title = document.createElement("span");
-          title.className = "choice-title";
-          title.textContent = m.name;
-          const note = document.createElement("span");
-          note.className = "choice-note";
-          note.textContent = m.note;
-          body.append(title, note);
-
-          lab.append(inp, body);
-          box.append(lab);
-        });
-      }
-
-      // ===================================================
-      // 船长纠正 2：Cursor系级联限制
-      // if fuel/harness is Cursor-family → only Grok/Composer model options enabled; others disabled/grey
-      // ===================================================
-      function applyCascading() {
-        const form = document.getElementById("vote-form");
-        if (!form) return;
-
-        const fd = new FormData(form);
-        const selFuel = String(fd.get("fuel") || "");
-        const selHarness = String(fd.get("harness") || "");
-        const isCursorFamily = selFuel.toLowerCase().includes("cursor") || selHarness.toLowerCase().includes("cursor");
-
-        const badge = document.getElementById("model-cascade-badge");
-        if (badge) {
-          badge.textContent = isCursorFamily ? "Cursor系仅限Grok/Composer" : "全模型开放";
-          badge.style.color = isCursorFamily ? "var(--amber)" : "var(--cyan)";
+      function tallyRows(map) {
+        const frag = document.createDocumentFragment();
+        const keys = Object.keys(map || {});
+        if (!keys.length) {
+          const p = document.createElement("p");
+          p.className = "ballot-hint";
+          p.textContent = "暂无票";
+          frag.append(p);
+          return frag;
         }
-
-        const modelLabels = document.querySelectorAll("#model-choices .choice-label");
-        modelLabels.forEach(label => {
-          const radio = label.querySelector('input[type="radio"]');
-          const modelId = label.dataset.modelId;
-          const item = MODEL_CATALOG.find(m => m.id === modelId);
-          const isCursorAllowed = item && item.isCursor;
-
-          if (isCursorFamily) {
-            // Cursor 系：仅 Grok 和 Composer 可选，其余 disabled 并灰显
-            if (isCursorAllowed) {
-              radio.disabled = false;
-              label.classList.remove("is-disabled");
-              label.querySelector(".choice-note").textContent = item.id === "grok-4.6" ? "Cursor主力模型" : "Cursor原生架构";
-            } else {
-              radio.disabled = true;
-              label.classList.add("is-disabled");
-              label.querySelector(".choice-note").textContent = "Cursor系暂不可用";
-              if (radio.checked) {
-                // 自动纠正到 grok-4.6
-                const defRadio = document.querySelector('input[name="model"][value="grok-4.6"]');
-                if (defRadio) defRadio.checked = true;
-              }
-            }
-          } else {
-            // 非 Cursor 系，解除此特定限制
-            radio.disabled = false;
-            label.classList.remove("is-disabled");
-            label.querySelector(".choice-note").textContent = item ? item.note : "";
-          }
+        keys.sort(function (a, b) { return (map[b] || 0) - (map[a] || 0); });
+        keys.forEach(function (k) {
+          const row = document.createElement("div");
+          row.className = "tally-row";
+          const name = document.createElement("span");
+          name.textContent = k;
+          const n = document.createElement("b");
+          n.textContent = String(map[k]);
+          row.append(name, n);
+          frag.append(row);
         });
-
-        // 同步流水线「开发中」展示卡
-        const curModel = String(form.elements["model"] ? form.elements["model"].value : "grok-4.6");
-        const curEnv = String(fd.get("environment") || "Cloud Agent 托管机");
-        setStackPill(document.getElementById("pipe-pill-fuel"), "燃料", selFuel);
-        setStackPill(document.getElementById("pipe-pill-model"), "模型", curModel);
-        setStackPill(document.getElementById("pipe-pill-harness"), "载体", selHarness);
-        setStackPill(document.getElementById("pipe-pill-env"), "环境", curEnv);
+        return frag;
       }
 
-      function bindCascadingConstraints() {
-        const form = document.getElementById("vote-form");
-        if (!form) return;
-
-        if (!state.cascadeBound) {
-          state.cascadeBound = true;
-          form.addEventListener("change", applyCascading);
-        }
-        applyCascading();
-      }
-
-      // ===================================================
-      // 投票提交与本地回执
-      // ===================================================
-      function checkVoteReceipt(windowId) {
-        const btn = document.getElementById("vote-submit-btn");
-        const msg = document.getElementById("vote-msg");
-        try {
-          const raw = localStorage.getItem(receiptKey(windowId));
-          if (raw) {
-            const rec = JSON.parse(raw);
-            if (rec && rec.windowId === windowId) {
-              if (btn) btn.disabled = true;
-              if (msg) {
-                msg.textContent = "本机已在本窗投过票（本地回执已记录，同一公网IP单窗限一次）。";
-                msg.setAttribute("data-kind", "ok");
-              }
-              return true;
-            }
-          }
-        } catch (_) {}
-        if (btn) btn.disabled = false;
-        if (msg) { msg.textContent = ""; msg.removeAttribute("data-kind"); }
-        return false;
-      }
-
-      const voteForm = document.getElementById("vote-form");
-      if (voteForm) {
-        voteForm.addEventListener("submit", async function (e) {
-          e.preventDefault();
-          if (state.submitting) return;
-          const panel = document.getElementById("vote-panel");
-          if (!state.window || (panel && panel.hidden)) return;
-
-          const btn = document.getElementById("vote-submit-btn");
-          const msg = document.getElementById("vote-msg");
-          const fd = new FormData(voteForm);
-
-          const payload = {
-            windowId: state.window.windowId,
-            fuel: String(fd.get("fuel") || ""),
-            harness: String(fd.get("harness") || ""),
-            environment: String(fd.get("environment") || ""),
-            candidateId: String(fd.get("candidateId") || ""),
-            fingerprint: getFingerprint()
-          };
-
-          if (!payload.fuel || !payload.harness || !payload.environment) {
-            msg.textContent = "请完整勾选燃料、运行载体与 7×24 环境。";
-            msg.setAttribute("data-kind", "err");
-            return;
-          }
-
-          state.submitting = true;
-          if (btn) btn.disabled = true;
-          msg.textContent = "正在提交选票至 Cloudflare KV…";
-          msg.removeAttribute("data-kind");
-
-          const apiBase = String(state.config && state.config.voteApiBase || "").trim().replace(/\/$/, "");
-          const voteUrl = apiBase ? (apiBase + "/api/vote") : "/api/vote";
-
-          try {
-            const res = await fetch(voteUrl, {
-              method: "POST",
-              headers: { "Content-Type": "application/json" },
-              body: JSON.stringify(payload)
-            });
-            const data = await res.json();
-
-            if (res.status === 409 && data.error === "already_voted") {
-              msg.textContent = "该公网 IP 已在本窗投过票。";
-              msg.setAttribute("data-kind", "err");
-              localStorage.setItem(receiptKey(state.window.windowId), JSON.stringify({
-                windowId: state.window.windowId, at: new Date().toISOString()
-              }));
-              return;
-            }
-
-            if (!data.ok) {
-              const errMap = {
-                window_closed: "本窗已关闭。",
-                invalid_option: "选项无效（仅可投军火库 active 启用项）。",
-                rate_limited: "请求过于频繁，请稍后再试。",
-                unknown_window: "投票窗尚未同步到后端。"
-              };
-              msg.textContent = errMap[data.error] || ("提交失败: " + (data.error || res.status));
-              msg.setAttribute("data-kind", "err");
-              if (btn) btn.disabled = false;
-              return;
-            }
-
-            // 成功记票
-            localStorage.setItem(receiptKey(state.window.windowId), JSON.stringify({
-              windowId: state.window.windowId,
-              at: new Date().toISOString(),
-              payload: payload
-            }));
-
-            msg.textContent = "✓ 投票成功！同一 IP 本窗不可再投，系统将在窗关闭时自动计票。";
-            msg.setAttribute("data-kind", "ok");
-
-            loadLiveTallies(state.window.windowId);
-          } catch (err) {
-            console.error("投票请求异常:", err);
-            msg.textContent = "无法连接至投票接口，请检查网络或 CORS 配置。";
-            msg.setAttribute("data-kind", "err");
-            if (btn) btn.disabled = false;
-          } finally {
-            state.submitting = false;
-          }
-        });
-      }
-
-      // 拉取实时票数统计
-      async function loadLiveTallies(windowId) {
-        const apiBase = String(state.config && state.config.voteApiBase || "").trim().replace(/\/$/, "");
-        if (!apiBase) return;
-
-        try {
-          const res = await fetch(apiBase + "/api/vote?windowId=" + encodeURIComponent(windowId), { cache: "no-store" });
-          if (!res.ok) return;
-          const data = await res.json();
-          if (data && data.ok) renderTalliesView(data);
-        } catch (_) {}
-      }
-
-      function renderTalliesView(data) {
-        const box = document.getElementById("tallies-box");
-        const countTag = document.getElementById("tallies-count-tag");
-        const grid = document.getElementById("tallies-grid");
-        if (!box || !grid) return;
-
-        box.hidden = false;
-        if (countTag) countTag.textContent = (data.voteCount || 0) + " 票";
-        grid.replaceChildren();
-
-        const labels = { fuel: "燃料 (Fuel)", harness: "载体 (Harness)", environment: "7×24 环境" };
-        const tallies = data.tallies || {};
-
-        ["fuel", "harness", "environment"].forEach(kind => {
+      function renderTallies(live, ledger) {
+        talliesEl.replaceChildren();
+        talliesEl.hidden = false;
+        const h = document.createElement("h3");
+        h.textContent = live ? ("本窗实时计票 · " + (live.voteCount || 0) + " 票") : "本窗计票（本地账本）";
+        talliesEl.append(h);
+        const grid = document.createElement("div");
+        grid.className = "tally-grid";
+        const source = (live && live.tallies) || (ledger && ledger.tallies) || {};
+        ["fuel", "harness", "environment"].forEach(function (kind) {
           const col = document.createElement("div");
-          col.className = "tally-group";
-          const h4 = document.createElement("h4");
-          h4.textContent = labels[kind];
-          col.append(h4);
-
-          const map = tallies[kind] || {};
-          const keys = Object.keys(map).sort((a, b) => (map[b] || 0) - (map[a] || 0));
-
-          if (!keys.length) {
-            const empty = document.createElement("p");
-            empty.style.fontSize = "0.72rem";
-            empty.style.color = "var(--ink-faint)";
-            empty.style.margin = "0";
-            empty.textContent = "暂无票";
-            col.append(empty);
-          } else {
-            keys.forEach(k => {
-              const row = document.createElement("div");
-              row.className = "tally-bar-row";
-              const name = document.createElement("span");
-              name.textContent = k;
-              const count = document.createElement("b");
-              count.textContent = map[k] + " 票";
-              row.append(name, count);
-              col.append(row);
-            });
-          }
+          const title = document.createElement("p");
+          title.style.margin = "0 0 0.25rem";
+          title.textContent = LABELS[kind];
+          col.append(title);
+          col.append(tallyRows(source[kind] || {}));
           grid.append(col);
         });
-
-        // 结算历史展示
-        const winBox = document.getElementById("tallies-winner");
-        if (winBox && state.ledger) {
-          const w = state.ledger.winningStack;
-          if (w) {
-            winBox.replaceChildren();
-            const b = document.createElement("b");
-            b.textContent = "上一窗结算参考：";
-            const rest = w.autoPick
-              ? "上一窗零票（autoPick 自动从军火库启用项选定栈）"
-              : [w.fuel, w.harness, w.environment].filter(Boolean).join(" · ");
-            winBox.append(b, document.createTextNode(rest));
-          }
+        talliesEl.append(grid);
+        if (ledger && ledger.winningStack) {
+          const last = document.createElement("p");
+          last.className = "ballot-last";
+          const w = ledger.winningStack;
+          last.textContent = ledger.lastSettleAt
+            ? (w.autoPick
+              ? "上一窗零票 · autoPick，编排器自选军火库启用项。"
+              : "上一窗结算：" + [w.fuel, w.harness, w.environment].filter(Boolean).join(" · "))
+            : "本窗尚未结算。";
+          talliesEl.append(last);
         }
       }
 
-      // ===================================================
-      // 渲染已上线演示卡片 (含 rationaleZh)
-      // ===================================================
-      function renderShippedCards() {
-        const grid = document.getElementById("cards-grid");
-        const searchInput = document.getElementById("demo-search");
-        if (!grid) return;
+      function applyReceipt(ballot) {
+        try {
+          const raw = localStorage.getItem(receiptKey(ballot.windowId));
+          if (!raw) return false;
+          const rec = JSON.parse(raw);
+          if (!rec || rec.windowId !== ballot.windowId) return false;
+          setStatus("本机已在本窗投过票（本地回执）。", "ok");
+          submitBtn.disabled = true;
+          return true;
+        } catch (_) {
+          return false;
+        }
+      }
 
-        const items = state.bookmarks.slice().sort((a, b) => {
-          const ta = Date.parse(a.processedAt) || 0;
-          const tb = Date.parse(b.processedAt) || 0;
-          return tb - ta; // 最新排在最前
+      function render() {
+        const ballot = state.ballot;
+        if (!ballot || !ballot.windowId) return;
+        ballotEl.hidden = false;
+        metaEl.textContent = "窗 " + ballot.windowId +
+          " · 上海 " + shanghaiClock(ballot.opensAt) + " → " + shanghaiClock(ballot.closesAt);
+        ingestEl.textContent = ballot.ingestNoteZh || "";
+        renderCandidates(ballot);
+        const options = votableOptions();
+        const canVote = options.fuel.length && options.harness.length && options.environment.length;
+        if (canVote) {
+          renderStack(options);
+          formEl.hidden = false;
+        }
+        const open = windowOpen(ballot);
+        const voted = applyReceipt(ballot);
+        if (!state.apiOk) {
+          submitBtn.disabled = true;
+          if (!voted) setStatus("投票接口未绑定。部署 workers/ballot-api 后填写 voteApiBase，或在现有 Pages 主机绑定 /api/*。", "err");
+        } else if (!open) {
+          submitBtn.disabled = true;
+          if (!voted) setStatus("本窗已关闭，等待下一拍结算。", "err");
+        } else if (!voted) {
+          submitBtn.disabled = false;
+          setStatus("");
+        }
+      }
+
+      formEl.addEventListener("submit", function (ev) {
+        ev.preventDefault();
+        if (state.submitting || submitBtn.disabled) return;
+        const ballot = state.ballot;
+        const fd = new FormData(formEl);
+        const payload = {
+          windowId: ballot.windowId,
+          fuel: String(fd.get("fuel") || ""),
+          harness: String(fd.get("harness") || ""),
+          environment: String(fd.get("environment") || ""),
+          candidateId: String(fd.get("candidateId") || ""),
+          fingerprint: fingerprint()
+        };
+        if (!payload.fuel || !payload.harness || !payload.environment) {
+          setStatus("请各选一项燃料、Harness 与 7×24。", "err");
+          return;
+        }
+        state.submitting = true;
+        submitBtn.disabled = true;
+        setStatus("正在提交…");
+        fetch(voteUrl(), {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload)
+        })
+          .then(function (res) { return res.json().then(function (data) { return { res: res, data: data }; }); })
+          .then(function (pack) {
+            const data = pack.data || {};
+            if (pack.res.status === 409 && data.error === "already_voted") {
+              setStatus("该 IP 已在本窗投过票。", "err");
+              try {
+                localStorage.setItem(receiptKey(ballot.windowId), JSON.stringify({
+                  windowId: ballot.windowId, at: new Date().toISOString(), blocked: "already_voted"
+                }));
+              } catch (_) {}
+              return;
+            }
+            if (!data.ok) {
+              const map = {
+                window_closed: "本窗已关闭。",
+                invalid_option: "选项无效（仅可投军火库启用项）。",
+                rate_limited: "请求过于频繁，请稍后再试。",
+                cooldown: "提交过快，请稍候。",
+                unknown_window: "投票窗未同步到接口。"
+              };
+              setStatus(map[data.error] || ("提交失败：" + (data.error || pack.res.status)), "err");
+              submitBtn.disabled = false;
+              return;
+            }
+            try {
+              localStorage.setItem(receiptKey(ballot.windowId), JSON.stringify({
+                windowId: ballot.windowId,
+                at: (data.receipt && data.receipt.at) || new Date().toISOString(),
+                fuel: payload.fuel,
+                harness: payload.harness,
+                environment: payload.environment,
+                candidateId: payload.candidateId || null
+              }));
+            } catch (_) {}
+            setStatus("已记票。同一 IP 本窗不可再投。", "ok");
+            loadTallies(ballot.windowId);
+          })
+          .catch(function () {
+            setStatus("无法连接到投票接口。", "err");
+            submitBtn.disabled = false;
+          })
+          .finally(function () { state.submitting = false; });
+      });
+
+      function loadTallies(windowId) {
+        return fetch(voteUrl(windowId), { cache: "no-store" })
+          .then(function (res) {
+            if (!res.ok) throw new Error("HTTP " + res.status);
+            return res.json();
+          })
+          .then(function (data) {
+            if (!data || !data.ok) throw new Error("bad tally");
+            state.apiOk = true;
+            renderTallies(data, state.ledger);
+            return data;
+          })
+          .catch(function () {
+            state.apiOk = false;
+            if (state.ledger) renderTallies(null, state.ledger);
+            return null;
+          });
+      }
+
+      function loadJson(rel) {
+        return fetch(new URL(rel, window.location.href).href, { cache: "no-store" })
+          .then(function (res) {
+            if (!res.ok) throw new Error("HTTP " + res.status);
+            return res.json();
+          });
+      }
+
+      Promise.all([
+        loadJson("./tracking/rotate-config.json"),
+        loadJson("./tracking/ballot-window.json"),
+        loadJson("./tracking/arsenal.json").catch(function () { return null; }),
+        loadJson("./tracking/vote-ledger.json").catch(function () { return null; })
+      ])
+        .then(function (pack) {
+          state.config = pack[0];
+          state.ballot = pack[1];
+          state.arsenal = pack[2];
+          state.ledger = pack[3];
+          return loadTallies(state.ballot && state.ballot.windowId).then(function () { render(); });
+        })
+        .catch(function () {
+          ballotEl.hidden = true;
         });
-
-        function filterAndRender() {
-          const q = String(searchInput ? searchInput.value : "").trim().toLowerCase();
-          grid.replaceChildren();
-
-          const matched = items.filter(it => {
-            if (!q) return true;
-            const fullText = [
-              it.slug, it.titleZh, it.title, it.hubTitle, it.author, it.blurbZh, it.rationaleZh,
-              it.subscriptionZh, it.modelZh, it.harnessZh, it.environmentZh
-            ].join(" ").toLowerCase();
-            return fullText.includes(q);
-          });
-
-          if (!matched.length) {
-            const empty = document.createElement("p");
-            empty.style.gridColumn = "1 / -1";
-            empty.style.color = "var(--ink-faint)";
-            empty.style.padding = "2rem 0";
-            empty.style.textAlign = "center";
-            empty.textContent = "没有找到匹配的演示项目";
-            grid.append(empty);
-            return;
-          }
-
-          matched.forEach(item => {
-            const card = document.createElement("article");
-            card.className = "card";
-
-            // 鼠标悬停光晕坐标绑定
-            card.addEventListener("mousemove", e => {
-              const rect = card.getBoundingClientRect();
-              card.style.setProperty("--mouse-x", (e.clientX - rect.left) + "px");
-              card.style.setProperty("--mouse-y", (e.clientY - rect.top) + "px");
-            });
-
-            // 卡片头部
-            const topRow = document.createElement("div");
-            topRow.className = "card-top";
-
-            const slugSpan = document.createElement("span");
-            slugSpan.className = "card-slug-badge";
-            slugSpan.textContent = item.slug || "demo";
-            topRow.append(slugSpan);
-
-            const originUrl = safeUrl(item.url);
-            if (originUrl) {
-              const originBtn = document.createElement("a");
-              originBtn.className = "card-origin-btn";
-              originBtn.href = originUrl;
-              originBtn.target = "_blank";
-              originBtn.rel = "noopener";
-              originBtn.textContent = "原帖 ↗";
-              topRow.append(originBtn);
-            }
-
-            // 卡片主体与 rationaleZh
-            const mid = document.createElement("div");
-            const h4 = document.createElement("h4");
-            h4.className = "card-title";
-            h4.textContent = item.hubTitle || item.titleZh || item.title || item.slug;
-            mid.append(h4);
-
-            // 重点：卡片立项理由 rationaleZh 视觉（textContent，禁止拼进 innerHTML）
-            const rationale = item.rationaleZh || item.blurbZh || "核心交互高保真还原与敏捷可测静态交付。";
-            const ratBox = document.createElement("div");
-            ratBox.className = "card-rationale-box";
-            const ratTag = document.createElement("span");
-            ratTag.className = "card-rationale-tag";
-            ratTag.textContent = "立项理由 / rationaleZh";
-            const ratText = document.createElement("p");
-            ratText.className = "card-rationale-text";
-            ratText.textContent = rationale;
-            ratBox.append(ratTag, ratText);
-            mid.append(ratBox);
-
-            // 技术栈胶囊
-            const tagsRow = document.createElement("div");
-            tagsRow.className = "card-tags";
-
-            const fuelVal = [item.subscriptionZh || item.subscription, item.modelZh || item.model].filter(Boolean).join(" · ");
-            if (fuelVal) {
-              const ft = document.createElement("span");
-              ft.className = "card-tag tag-fuel";
-              ft.textContent = fuelVal;
-              tagsRow.append(ft);
-            }
-            const harnessVal = item.harnessZh || item.harness;
-            if (harnessVal) {
-              const ht = document.createElement("span");
-              ht.className = "card-tag tag-harness";
-              ht.textContent = harnessVal;
-              tagsRow.append(ht);
-            }
-            const envVal = item.environmentZh || item.environment || item.cloudZh;
-            if (envVal) {
-              const et = document.createElement("span");
-              et.className = "card-tag tag-env";
-              et.textContent = envVal;
-              tagsRow.append(et);
-            }
-            mid.append(tagsRow);
-
-            // 卡片底部操作
-            const btm = document.createElement("div");
-            btm.className = "card-bottom";
-
-            const authSpan = document.createElement("span");
-            authSpan.className = "card-author-meta";
-            authSpan.textContent = item.author ? "@" + item.author : "";
-
-            const enterBtn = document.createElement("a");
-            enterBtn.className = "card-enter-btn";
-            const demoPath = item.path || (item.slug ? "apps/" + item.slug + "/" : "#");
-            enterBtn.href = String(demoPath).replace(/^\//, "");
-            enterBtn.textContent = "体验演示 ↗";
-
-            btm.append(authSpan, enterBtn);
-
-            card.append(topRow, mid, btm);
-            grid.append(card);
-          });
-        }
-
-        state.demoFilterAndRender = filterAndRender;
-        if (searchInput && !state.searchBound) {
-          state.searchBound = true;
-          searchInput.addEventListener("input", function () {
-            if (typeof state.demoFilterAndRender === "function") state.demoFilterAndRender();
-          });
-        }
-        filterAndRender();
-      }
-
-      // ===================================================
-      // 军火库三层架构渲染 (Fuel / Harness / Environment)
-      // ===================================================
-      function renderArsenal() {
-        const sec = document.getElementById("arsenal-section");
-        const container = document.getElementById("arsenal-3tiers");
-        if (!sec || !container || !state.arsenal) return;
-
-        const sections = Array.isArray(state.arsenal.sections) ? state.arsenal.sections : [];
-        if (!sections.length) { sec.hidden = true; return; }
-
-        sec.hidden = false;
-        container.replaceChildren();
-
-        sections.forEach(s => {
-          const col = document.createElement("div");
-          col.className = "arsenal-column";
-
-          const head = document.createElement("div");
-          head.className = "tier-header";
-
-          const titleRow = document.createElement("div");
-          titleRow.className = "tier-title";
-          const titleName = document.createElement("span");
-          titleName.textContent = s.titleZh || s.id;
-          const titleBadge = document.createElement("span");
-          titleBadge.className = "tier-badge";
-          titleBadge.textContent = s.id ? s.id.toUpperCase() : "";
-          titleRow.append(titleName, titleBadge);
-          head.append(titleRow);
-
-          if (s.blurbZh) {
-            const blurb = document.createElement("p");
-            blurb.className = "tier-blurb";
-            blurb.textContent = s.blurbZh;
-            head.append(blurb);
-          }
-          col.append(head);
-
-          const ul = document.createElement("ul");
-          ul.className = "tier-list";
-
-          (s.items || []).forEach(it => {
-            const li = document.createElement("li");
-            const isPlanned = it.status === "planned";
-            li.className = "tier-item" + (isPlanned ? " is-planned" : "");
-
-            const row = document.createElement("div");
-            row.className = "tier-item-row";
-
-            const name = document.createElement("span");
-            name.className = "tier-item-name";
-            name.textContent = it.nameZh || it.name || "—";
-
-            const chip = document.createElement("span");
-            chip.className = "status-chip " + (isPlanned ? "chip-planned" : "chip-active");
-            chip.textContent = isPlanned ? "规划中" : "启用";
-
-            row.append(name, chip);
-            li.append(row);
-
-            if (it.noteZh) {
-              const note = document.createElement("span");
-              note.className = "tier-item-note";
-              note.textContent = it.noteZh;
-              li.append(note);
-            }
-
-            ul.append(li);
-          });
-
-          col.append(ul);
-          container.append(col);
-        });
-      }
-
-      // 启动加载
-      loadAllData();
     })();
   </script>
 </body>
