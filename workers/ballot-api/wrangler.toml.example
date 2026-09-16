@@ -16,6 +16,8 @@ id = "REPLACE_WITH_KV_NAMESPACE_ID"
 # Cloudflare Workers Cron Triggers (UTC). NOT local crontab, NOT Grok Bot.
 # Primary: every minute so 10-minute vote windows are settled near closesAt.
 # 8h expression 0 0,8,16 * * * is deprecated as the main narrative.
+# If your local untracked wrangler.toml still has 0 0,8,16 * * *, replace with
+# every-minute cron matching this example before deploy.
 [triggers]
 crons = ["*/1 * * * *"]
 
