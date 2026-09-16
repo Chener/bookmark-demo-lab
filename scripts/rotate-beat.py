@@ -749,7 +749,7 @@ def run_ingest_only(*, dry_run: bool, replace_candidates: bool) -> int:
             dump_json(BALLOT_PATH, ballot)
         return 2
     note = ingest_note_zh(
-        len(candidates),
+        len(result.incoming),
         slim_found=True,
         has_more=result.has_more,
         merged=not replace_candidates,
@@ -1110,6 +1110,17 @@ def self_test_ingest() -> None:
             [existing_keep], partial.incoming, replace=True, has_more=False
         )
         assert [row["id"] for row in replaced] == [in_id]
+
+        # ingest-only note counts newly incoming rows, not post-merge kept total.
+        keep_only = apply_ingest_candidates(
+            [existing_keep], [], replace=False, has_more=True
+        )
+        assert [row["id"] for row in keep_only] == ["1999000000000000009"]
+        keep_note = ingest_note_zh(0, slim_found=True, has_more=True, merged=True)
+        assert "无未见过的书签 id" in keep_note
+        assert "保留既有候选" in keep_note
+        assert "已摄入" not in keep_note
+        assert "已摄入" in ingest_note_zh(len(keep_only), slim_found=True, merged=True)
 
         # Corrupt seen file fails closed (does not treat as empty seen).
         bad_seen = tmp_path / "seen-bad.json"
