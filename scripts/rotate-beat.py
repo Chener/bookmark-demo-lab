@@ -2,9 +2,12 @@
 """Manual / admin fallback for ballot rotate.
 
 Primary scheduler is Cloudflare Workers Cron Triggers on workers/ballot-api
-(UTC 0 0,8,16 * * *). This script is not crontab and not a Grok Bot routine.
+(UTC */1 * * * *, every minute for 10-minute vote windows).
+8h UTC 0 0,8,16 * * * is deprecated as the main narrative.
+This script is not crontab and not a Grok Bot routine.
 
-Use when Cron failed or you need to git-sync KV snapshots. Does not use GitHub Issues.
+Use when Cron failed or you need to git-sync KV snapshots, or --ingest-only.
+Does not use GitHub Issues.
 """
 from __future__ import annotations
 
@@ -91,22 +94,32 @@ def period_hours(cfg: dict) -> int:
     return n if n > 0 else 8
 
 
-def window_id_for(start_local: datetime) -> str:
+def vote_window_minutes(cfg: dict) -> int:
+    """Source of truth for closesAt - opensAt. voteWindowMinutes wins; else periodHours * 60."""
+    raw = cfg.get("voteWindowMinutes")
+    if raw is not None:
+        n = int(raw)
+        if n > 0:
+            return n
+    return period_hours(cfg) * 60
+
+
+def window_id_for(start_local: datetime, cfg: dict | None = None) -> str:
+    minutes = vote_window_minutes(cfg) if cfg is not None else None
+    if minutes is not None and (minutes % 60 != 0 or start_local.minute != 0):
+        return start_local.strftime("%Y-%m-%d-") + f"{start_local.hour:02d}{start_local.minute:02d}"
     return start_local.strftime("%Y-%m-%d-") + f"{start_local.hour:02d}"
 
 
 def containing_window(now_utc: datetime, cfg: dict) -> tuple[datetime, datetime]:
     tz = tzinfo(cfg)
-    period = period_hours(cfg)
-    slots = slot_hours(cfg)
+    minutes = vote_window_minutes(cfg)
     now_local = now_utc.astimezone(tz)
-    hour = now_local.hour
-    if hour < slots[0]:
-        start = now_local.replace(hour=slots[-1], minute=0, second=0, microsecond=0) - timedelta(days=1)
-    else:
-        start_h = max(s for s in slots if s <= hour)
-        start = now_local.replace(hour=start_h, minute=0, second=0, microsecond=0)
-    end = start + timedelta(hours=period)
+    minute_of_day = now_local.hour * 60 + now_local.minute
+    slot_start = (minute_of_day // minutes) * minutes
+    start_h, start_min = divmod(slot_start, 60)
+    start = now_local.replace(hour=start_h, minute=start_min, second=0, microsecond=0)
+    end = start + timedelta(minutes=minutes)
     return start, end
 
 
@@ -164,7 +177,7 @@ def vote_api_base(cfg: dict) -> str:
 
 
 def window_rank(window: dict | None) -> tuple[float | None, str] | None:
-    """Comparable rank: opensAt epoch when parseable, then sortable windowId (YYYY-MM-DD-HH)."""
+    """Comparable rank: opensAt epoch when parseable, then sortable windowId (YYYY-MM-DD-HH or HHMM)."""
     if not isinstance(window, dict):
         return None
     wid = str(window.get("windowId") or "").strip()
@@ -229,7 +242,16 @@ def fetch_worker_ledger(base: str) -> dict[str, Any] | None:
 def ballot_file_from_window(window: dict) -> dict[str, Any]:
     options = window.get("options") if isinstance(window.get("options"), dict) else {}
     candidates = window.get("candidates") if isinstance(window.get("candidates"), list) else []
-    return {
+    vote_minutes = window.get("voteWindowMinutes")
+    if vote_minutes:
+        vote_minutes = int(vote_minutes)
+    else:
+        try:
+            span = parse_iso(str(window.get("closesAt") or "")) - parse_iso(str(window.get("opensAt") or ""))
+            vote_minutes = max(1, int(round(span.total_seconds() / 60)))
+        except (TypeError, ValueError, OSError):
+            vote_minutes = None
+    out: dict[str, Any] = {
         "version": int(window.get("version") or 1),
         "windowId": str(window.get("windowId") or ""),
         "timezone": str(window.get("timezone") or "Asia/Shanghai"),
@@ -247,6 +269,9 @@ def ballot_file_from_window(window: dict) -> dict[str, Any]:
             or "本窗无新书签增量：Worker Cron 不抓 X。仍可投燃料 / harness / 7×24。"
         ),
     }
+    if vote_minutes:
+        out["voteWindowMinutes"] = vote_minutes
+    return out
 
 
 def ledger_file_from_remote(ledger: dict) -> dict[str, Any]:
@@ -720,7 +745,10 @@ def run_ingest_only(*, dry_run: bool, replace_candidates: bool) -> int:
     """Refresh current ballot-window.json candidates from slim JSON; do not settle.
 
     Default is merge-by-id (keep existing open candidates absent from this slim page).
+    If rotate-config has voteWindowMinutes, stamp it and PUT the same opens/closes
+    (10-minute span is applied when Cron/settle opens the next window).
     """
+    cfg = load_json(CONFIG_PATH) if CONFIG_PATH.exists() else {}
     ballot = load_json(BALLOT_PATH)
     existing = list(ballot.get("candidates") or [])
     opens = parse_iso(str(ballot["opensAt"]))
@@ -754,11 +782,14 @@ def run_ingest_only(*, dry_run: bool, replace_candidates: bool) -> int:
         has_more=result.has_more,
         merged=not replace_candidates,
     )
+    if cfg.get("voteWindowMinutes"):
+        ballot["voteWindowMinutes"] = vote_window_minutes(cfg)
     summary = {
         "action": "ingest_only",
         "windowId": ballot.get("windowId"),
         "opensAt": ballot.get("opensAt"),
         "closesAt": ballot.get("closesAt"),
+        "voteWindowMinutes": ballot.get("voteWindowMinutes"),
         "slimPath": str(result.path or slim),
         "hasMore": result.has_more,
         "replaceCandidates": replace_candidates,
@@ -773,6 +804,7 @@ def run_ingest_only(*, dry_run: bool, replace_candidates: bool) -> int:
     ballot["candidates"] = candidates
     ballot["ingestNoteZh"] = note
     dump_json(BALLOT_PATH, ballot)
+    put_window(vote_api_base(cfg), os.environ.get("BALLOT_ADMIN_TOKEN", "").strip(), ballot)
     return 0
 
 
@@ -969,6 +1001,26 @@ def self_test() -> int:
     )
     assert maybe_commit_push("x", no_git=True, no_push=False, dry_run=False) == "no_git"
     assert maybe_commit_push("x", no_git=False, no_push=False, dry_run=True) == "dry_run"
+
+    cfg10 = {**cfg, "voteWindowMinutes": 10}
+    now10 = parse_iso("2026-09-16T00:03:00.000Z")  # 08:03 Shanghai
+    s10, e10 = containing_window(now10, cfg10)
+    assert iso_z(s10) == "2026-09-16T00:00:00.000Z"
+    assert iso_z(e10) == "2026-09-16T00:10:00.000Z"
+    assert (e10 - s10) == timedelta(minutes=10)
+    assert window_id_for(s10, cfg10) == "2026-09-16-0800"
+    now10b = parse_iso("2026-09-16T00:14:00.000Z")  # 08:14 Shanghai
+    s10b, e10b = containing_window(now10b, cfg10)
+    assert iso_z(s10b) == "2026-09-16T00:10:00.000Z"
+    assert iso_z(e10b) == "2026-09-16T00:20:00.000Z"
+    assert window_id_for(s10b, cfg10) == "2026-09-16-0810"
+    close10 = parse_iso("2026-09-16T00:10:00.000Z")
+    n10s, n10e = next_window_after(close10, cfg10)
+    assert iso_z(n10s) == "2026-09-16T00:10:00.000Z"
+    assert iso_z(n10e) == "2026-09-16T00:20:00.000Z"
+    assert vote_window_minutes(cfg10) == 10
+    assert vote_window_minutes(cfg) == 8 * 60
+
     self_test_ingest()
     print("self-test ok")
     return 0
@@ -1225,7 +1277,7 @@ def main() -> int:
     # Never reopen the window we just settled; if still inside it (or exactly on close), advance.
     if (
         want_start.astimezone(timezone.utc) <= closes
-        or window_id_for(want_start) == ballot.get("windowId")
+        or window_id_for(want_start, cfg) == ballot.get("windowId")
     ):
         want_start, want_end = next_window_after(closes, cfg)
 
@@ -1248,15 +1300,16 @@ def main() -> int:
     options = active_options(arsenal)
     next_ballot = {
         "version": 1,
-        "windowId": window_id_for(want_start),
+        "windowId": window_id_for(want_start, cfg),
         "timezone": cfg.get("timezone") or "Asia/Shanghai",
         "periodHours": period_hours(cfg),
+        "voteWindowMinutes": vote_window_minutes(cfg),
         "opensAt": iso_z(want_start),
         "closesAt": iso_z(want_end),
         "candidates": candidates,
         "options": options,
         "ingestNoteZh": ingest_note_zh(
-            len(candidates),
+            len(result.incoming),
             slim_found=result.slim_found,
             has_more=result.has_more,
             merged=not args.replace_candidates,

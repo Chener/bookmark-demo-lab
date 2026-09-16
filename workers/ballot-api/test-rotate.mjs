@@ -8,9 +8,13 @@ import {
   plurality,
   settleFromTallies,
   nextBallotSnapshot,
+  bootstrapBallot,
+  defaultConfig,
   runRotate,
   ackRotateFlags,
   periodHours,
+  voteWindowMinutes,
+  CRON_UTC,
   LOCK_TTL_S,
   KV_MIN_TTL_S,
   kvTtl
@@ -184,6 +188,62 @@ test("next snapshot uses config periodHours/slotHours", () => {
   assert.equal(next.periodHours, 8);
   assert.equal(next.candidates.length, 0);
   assert.match(next.ingestNoteZh, /不抓 X/);
+});
+
+const CFG10 = {
+  timezone: "Asia/Shanghai",
+  voteWindowMinutes: 10,
+  periodHours: 8,
+  slotHours: [0, 8, 16]
+};
+
+test("10-minute voteWindowMinutes sets closesAt = opensAt + 10m", () => {
+  assert.equal(voteWindowMinutes(CFG10), 10);
+  assert.equal(voteWindowMinutes(CFG), 8 * 60);
+  assert.equal(CRON_UTC, "*/1 * * * *");
+
+  const now = parseIso("2026-09-16T00:03:00.000Z");
+  const win = containingWindow(now, CFG10);
+  assert.equal(isoZ(win.startMs), "2026-09-16T00:00:00.000Z");
+  assert.equal(isoZ(win.endMs), "2026-09-16T00:10:00.000Z");
+  assert.equal(win.endMs - win.startMs, 10 * 60 * 1000);
+  assert.equal(windowIdFor(win.startLocal), "2026-09-16-0800");
+
+  const now2 = parseIso("2026-09-16T00:14:00.000Z");
+  const w2 = containingWindow(now2, CFG10);
+  assert.equal(isoZ(w2.startMs), "2026-09-16T00:10:00.000Z");
+  assert.equal(isoZ(w2.endMs), "2026-09-16T00:20:00.000Z");
+  assert.equal(windowIdFor(w2.startLocal), "2026-09-16-0810");
+
+  const close = parseIso("2026-09-16T00:10:00.000Z");
+  const nxt = nextWindowAfter(close, CFG10);
+  assert.equal(isoZ(nxt.startMs), "2026-09-16T00:10:00.000Z");
+  assert.equal(isoZ(nxt.endMs), "2026-09-16T00:20:00.000Z");
+  assert.equal(windowIdFor(nxt.startLocal), "2026-09-16-0810");
+
+  const ballot = { windowId: "2026-09-16-0800" };
+  const next = nextBallotSnapshot(close, close, ballot, CFG10, { fuel: ["Cursor Ultra"] });
+  assert.equal(next.opensAt, "2026-09-16T00:10:00.000Z");
+  assert.equal(next.closesAt, "2026-09-16T00:20:00.000Z");
+  assert.equal(Date.parse(next.closesAt) - Date.parse(next.opensAt), 10 * 60 * 1000);
+  assert.equal(next.voteWindowMinutes, 10);
+  assert.equal(next.candidates.length, 0);
+
+  const boot = bootstrapBallot(now, CFG10, { fuel: [] });
+  assert.equal(boot.opensAt, "2026-09-16T00:00:00.000Z");
+  assert.equal(boot.closesAt, "2026-09-16T00:10:00.000Z");
+  assert.equal(boot.voteWindowMinutes, 10);
+  assert.equal(boot.windowId, "2026-09-16-0800");
+});
+
+test("defaultConfig stays legacy periodHours until rotate-config is fetched", () => {
+  const cold = defaultConfig();
+  assert.equal(cold.periodHours, 8);
+  assert.equal(cold.voteWindowMinutes, undefined);
+  assert.equal(voteWindowMinutes(cold), 8 * 60);
+  const boot = bootstrapBallot(parseIso("2026-09-16T00:03:00.000Z"), cold, {});
+  assert.equal(boot.closesAt, "2026-09-16T08:00:00.000Z");
+  assert.notEqual(Date.parse(boot.closesAt) - Date.parse(boot.opensAt), 10 * 60 * 1000);
 });
 
 test("runRotate skips while window still open", async () => {
@@ -681,4 +741,49 @@ test("priorStatus get throw does not write fail status that clears harness flags
   assert.equal(stored.needsGitPush, true);
   assert.equal(stored.needsXIngest, true);
   assert.doesNotMatch(String(stored.noteZh || ""), /未改窗/);
+});
+
+test("runRotate with voteWindowMinutes opens a 10-minute next window", async () => {
+  const kv = new MemKV();
+  await kv.put("current-window", JSON.stringify({
+    windowId: "2026-09-16-0800",
+    opensAt: "2026-09-16T00:00:00.000Z",
+    closesAt: "2026-09-16T00:10:00.000Z",
+    periodHours: 8,
+    voteWindowMinutes: 10,
+    candidates: [],
+    options: { fuel: ["Cursor Ultra"], harness: ["Cursor Cloud Agent"], environment: ["Cursor Cloud Agent 托管机"] }
+  }));
+  await kv.put("tally:2026-09-16-0800", JSON.stringify({
+    voteCount: 1,
+    fuel: { "Cursor Ultra": 1 },
+    harness: { "Cursor Cloud Agent": 1 },
+    environment: { "Cursor Cloud Agent 托管机": 1 },
+    candidate: {}
+  }));
+  const fetchImpl = async function (url) {
+    const u = new URL(url);
+    if (u.pathname.endsWith("rotate-config.json")) {
+      return { ok: true, json: async () => CFG10 };
+    }
+    return mockFetch()(url);
+  };
+  const env = { BALLOT_KV: kv, ORIGIN: "https://bookmark-demo-lab.pages.dev" };
+  const status = await runRotate(env, {
+    nowMs: parseIso("2026-09-16T00:10:00.000Z"),
+    cron: "*/1 * * * *",
+    skipLock: true,
+    fetchImpl: fetchImpl
+  });
+  assert.equal(status.ok, true);
+  assert.equal(status.action, "rotated");
+  assert.equal(status.settledWindowId, "2026-09-16-0800");
+  assert.equal(status.nextWindowId, "2026-09-16-0810");
+  const next = await kv.get("current-window", "json");
+  assert.equal(next.windowId, "2026-09-16-0810");
+  assert.equal(next.opensAt, "2026-09-16T00:10:00.000Z");
+  assert.equal(next.closesAt, "2026-09-16T00:20:00.000Z");
+  assert.equal(next.voteWindowMinutes, 10);
+  assert.equal(Date.parse(next.closesAt) - Date.parse(next.opensAt), 10 * 60 * 1000);
+  assert.equal(next.candidates.length, 0);
 });
