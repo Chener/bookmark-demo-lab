@@ -326,6 +326,7 @@
       if (!state.counting) return;
       if (i >= beats.length) {
         countdownEl.hidden = true;
+        countdownEl.textContent = "";
         state.counting = false;
         state.running = true;
         state.last = 0;

@@ -290,6 +290,10 @@ h1 {
   pointer-events: none;
 }
 
+.countdown[hidden] {
+  display: none !important;
+}
+
 .lanes { display: flex; flex-direction: column; gap: 0.55rem; }
 
 .lane {
