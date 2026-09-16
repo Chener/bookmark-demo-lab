@@ -1,0 +1,138 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta name="theme-color" content="#12141a" />
+  <title>Go 现代化护栏 — bookmark-demo-lab</title>
+  <meta name="description" content="静态致敬：JetBrains 官方 go-modern-guidelines。对照过时 AI Go 与现代化护栏后的写法，并把护栏装进 Claude Code / Codex / Cursor。" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&family=Noto+Sans+SC:wght@400;500;700;900&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <div class="glow" aria-hidden="true"></div>
+
+  <header class="nav">
+    <a class="hub" href="../../">← 实验室主页</a>
+    <p class="path"><code>apps/go-modern-guidelines</code></p>
+    <a class="origin" href="https://x.com/Ryrenz/status/2099756605491253477" target="_blank" rel="noopener noreferrer">原帖 @Ryrenz</a>
+  </header>
+
+  <main>
+    <section class="hero">
+      <p class="kicker"><span aria-hidden="true">🐹</span> JetBrains 官方 · 专治过时 AI Go</p>
+      <h1>过时写法，对照一下</h1>
+      <p class="lede">
+        原帖点名：AI 写 Go 常拿手写 if-else 比大小、for 循环查切片、一层层判 nil。
+        代码能跑，但放在今天就是过时的。把 <strong>go-modern-guidelines</strong> 装进 Claude Code / Codex / Cursor，按 <code>go.mod</code> 写到该版本为止。
+      </p>
+      <div class="hero-actions">
+        <a class="btn primary" href="#bench">打开对照工位</a>
+        <a class="btn ghost" href="#install">装进 agent</a>
+      </div>
+      <blockquote class="quote">
+        <p>JetBrains 官方出手，专治 AI 写出一手过时 Go 代码：go-modern-guidelines 装进 Claude Code、Codex、Cursor 就能用。GitHub 上 3400 多 star，官方仓库还上过 Trending。</p>
+        <cite>
+          <a href="https://x.com/Ryrenz/status/2099756605491253477" target="_blank" rel="noopener noreferrer">@Ryrenz</a>
+          · 书签原文
+        </cite>
+      </blockquote>
+    </section>
+
+    <section class="why" aria-label="为什么会过时">
+      <article>
+        <p class="tag">训练滞后</p>
+        <h2>模型没见过新语法</h2>
+        <p>截止日之后的 stdlib，例如 <code>errors.AsType[T]</code>、<code>new(42)</code>，训练数据里根本没有。</p>
+      </article>
+      <article>
+        <p class="tag">出现频率</p>
+        <h2>旧写法在语料里更多</h2>
+        <p>就算模型认识 <code>for i := range n</code>，语料里仍是 <code>for i := 0; i &lt; n; i++</code> 占多数。</p>
+      </article>
+    </section>
+
+    <section class="bench" id="bench" aria-label="过时与现代对照工位">
+      <div class="bench-bar">
+        <p class="mod">
+          <span>go.mod</span>
+          <code data-gomod>go 1.24</code>
+        </p>
+        <p class="cover" data-cover>护栏覆盖 0 / 0</p>
+        <button class="btn tiny" type="button" data-modernize>对照 / 现代化</button>
+      </div>
+
+      <div class="versions" role="group" aria-label="选择 go.mod 版本">
+        <p>项目版本</p>
+        <div class="chips" data-versions></div>
+      </div>
+
+      <div class="split">
+        <article class="pane stale" aria-label="过时 AI Go">
+          <header>
+            <span class="dot warn" aria-hidden="true"></span>
+            <h3>过时 AI Go</h3>
+            <span class="file">main.go</span>
+          </header>
+          <pre><code data-before></code></pre>
+        </article>
+        <article class="pane fresh" aria-label="现代化护栏后">
+          <header>
+            <span class="dot ok" aria-hidden="true"></span>
+            <h3>现代化护栏后</h3>
+            <span class="file" data-after-file>main.go</span>
+          </header>
+          <pre><code data-after></code></pre>
+        </article>
+      </div>
+      <p class="rule-note" data-note></p>
+
+      <div class="rules">
+        <div class="rules-head">
+          <h2>可点对照 · 现代化清单</h2>
+          <p>先点原帖点名的三条，再勾选「已对照」。高于当前 <code>go.mod</code> 的规则会锁住。</p>
+        </div>
+        <div class="rule-list" data-rules></div>
+      </div>
+    </section>
+
+    <section class="install" id="install" aria-label="装进 agent">
+      <div class="install-head">
+        <h2>装进 agent 玩具流</h2>
+        <p>官方仓可装进 Claude Code、Codex、Cursor；其他 agent 走 skills.sh。这是工位模拟，不会改你本机。</p>
+      </div>
+      <div class="agents" data-agents role="tablist" aria-label="选择 agent"></div>
+      <div class="term-wrap">
+        <div class="term-bar">
+          <span data-agent-label>Claude Code</span>
+          <button class="btn tiny ghost" type="button" data-run-step>执行下一步</button>
+          <button class="btn tiny ghost" type="button" data-reset-term>重来</button>
+        </div>
+        <ol class="steps" data-steps></ol>
+        <pre class="term" aria-live="polite"><code data-term></code></pre>
+        <p class="term-status" data-term-status>点「执行下一步」，把护栏挂上。</p>
+      </div>
+    </section>
+
+    <section class="note">
+      <h2>这页能做什么、不能做什么</h2>
+      <ul>
+        <li>纯静态 HTML / CSS / JS。没有密钥，也不会真的往 Claude Code / Codex / Cursor 装插件。</li>
+        <li>对照片段对齐 JetBrains 官方仓 FEATURES 与 README 点名的惯用法，以及原帖举的三类过时写法。</li>
+        <li>安装命令来自官方 README，终端是玩具回放，不是真实 CLI。</li>
+      </ul>
+    </section>
+  </main>
+
+  <footer class="foot">
+    <a href="../../">返回实验室主页</a>
+    <a href="https://x.com/Ryrenz/status/2099756605491253477" target="_blank" rel="noopener noreferrer">来源收藏 · Ryrenz</a>
+    <a href="https://github.com/JetBrains/go-modern-guidelines" target="_blank" rel="noopener noreferrer">JetBrains/go-modern-guidelines</a>
+    <span>apps/go-modern-guidelines</span>
+  </footer>
+
+  <script src="app.js"></script>
+</body>
+</html>

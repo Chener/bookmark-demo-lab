@@ -2,6 +2,23 @@
   "version": 1,
   "items": [
     {
+      "id": "2099756605491253477",
+      "url": "https://x.com/Ryrenz/status/2099756605491253477",
+      "slug": "go-modern-guidelines",
+      "title": "JetBrains official go-modern-guidelines",
+      "titleZh": "JetBrains 官方 go-modern-guidelines：过时写法对照工位",
+      "hubTitle": "Go 现代化护栏",
+      "blurbZh": "专治 AI 写出过时 Go，可装进 Claude Code / Codex / Cursor。",
+      "rationaleZh": "原帖把 JetBrains 官方 go-modern-guidelines 钉成可装进 agent 的 Go 现代化护栏，适合做成过时写法对照工位。",
+      "author": "Ryrenz",
+      "processedAt": "2026-09-16T07:34:00.000Z",
+      "path": "/apps/go-modern-guidelines/",
+      "subscriptionZh": "Cursor Ultra",
+      "modelZh": "grok-4.6",
+      "harnessZh": "Cursor Cloud Agent",
+      "environmentZh": "Cursor Cloud Agent 托管机"
+    },
+    {
       "id": "2099836448044175427",
       "url": "https://x.com/superalesha/status/2099836448044175427",
       "slug": "agent-kart-quad",
