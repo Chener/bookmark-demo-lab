@@ -17,6 +17,7 @@ import sys
 import tempfile
 import urllib.error
 import urllib.request
+from dataclasses import dataclass
 from urllib.parse import quote
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
@@ -419,18 +420,39 @@ def resolve_slim_path(explicit: Path | str | None = None) -> Path | None:
     return None
 
 
+class IngestError(Exception):
+    """Bookmark ingest aborted (fail closed)."""
+
+    def __init__(self, code: str, detail: str = "") -> None:
+        self.code = code
+        self.detail = detail
+        super().__init__(f"{code}: {detail}" if detail else code)
+
+
+@dataclass
+class SlimIngestResult:
+    incoming: list[dict[str, Any]]
+    path: Path | None
+    slim_found: bool
+    has_more: bool
+    skipped_seen: int = 0
+    skipped_window: int = 0
+    skipped_bad: int = 0
+
+
 def load_seen_ids(seen_path: Path | None = None) -> set[str]:
+    """Load processed bookmark ids. Missing file → empty set. Corrupt file → fail closed."""
     path = seen_path if seen_path is not None else SEEN_PATH
     ids: set[str] = set()
     if not path.exists():
         return ids
     try:
         seen = load_json(path)
-    except (OSError, json.JSONDecodeError, UnicodeDecodeError, TypeError, ValueError):
-        return ids
+    except (OSError, json.JSONDecodeError, UnicodeDecodeError, TypeError, ValueError) as exc:
+        raise IngestError("seen_corrupt", f"failed to read {path}: {exc}") from exc
     items = seen.get("items") if isinstance(seen, dict) else None
     if not isinstance(items, list):
-        return ids
+        raise IngestError("seen_corrupt", f"{path} missing list field items")
     for item in items:
         if isinstance(item, dict) and item.get("id"):
             ids.add(str(item["id"]).strip())
@@ -516,10 +538,28 @@ def candidate_from_slim_item(item: dict[str, Any]) -> dict[str, Any] | None:
     }
 
 
-def ingest_note_zh(candidate_count: int, *, slim_found: bool) -> str:
+def ingest_note_zh(
+    candidate_count: int,
+    *,
+    slim_found: bool,
+    parse_failed: bool = False,
+    has_more: bool = False,
+    merged: bool = False,
+) -> str:
+    if parse_failed:
+        return (
+            "本窗书签 ingest 失败：Firstmate X MCP slim JSON 存在但读取/解析失败，未整表替换候选。"
+            "Worker Cron 不抓 X。绝不伪造书签。仍可投燃料 / harness / 7×24。"
+        )
+    more = "slim 标注 has_more=true（可能还有后续页）。" if has_more else ""
+    mode = (
+        "已按 id 合并，未删除 slim 中未出现的既有候选。"
+        if merged
+        else "已按 slim 全量替换候选。"
+    )
     if candidate_count > 0:
         return (
-            f"已摄入 {candidate_count} 条本窗书签增量（Firstmate X MCP slim），作为待投票。"
+            f"已摄入 {candidate_count} 条本窗书签候选（Firstmate X MCP slim）。{more}{mode}"
             "仍可投燃料 / harness / 7×24。"
         )
     if not slim_found:
@@ -529,10 +569,68 @@ def ingest_note_zh(candidate_count: int, *, slim_found: bool) -> str:
             "Worker Cron 不抓 X。官方自建 X App / X_BEARER_TOKEN 非主线（船长 2026-09-16）。"
             "仍可投燃料 / harness / 7×24。"
         )
+    keep = "保留既有候选。" if merged else ""
     return (
-        "本窗无新书签增量：Firstmate X MCP slim 已读，本窗无未见过的书签 id。"
+        f"本窗无新书签增量：Firstmate X MCP slim 已读，{more}本窗无未见过的书签 id。{keep}"
         "Worker Cron 不抓 X。绝不伪造书签。仍可投燃料 / harness / 7×24。"
     )
+
+
+def slim_has_more(data: Any) -> bool:
+    if not isinstance(data, dict):
+        return False
+    flag = data.get("has_more")
+    return flag is True or flag == 1 or str(flag).strip().lower() == "true"
+
+
+def merge_candidates_by_id(
+    existing: list[Any],
+    incoming: list[dict[str, Any]],
+) -> list[dict[str, Any]]:
+    """Add/update slim ids; never drop existing open rows absent from this page."""
+    incoming_by_id: dict[str, dict[str, Any]] = {}
+    incoming_order: list[str] = []
+    for row in incoming:
+        cid = str(row.get("id") or "").strip()
+        if not cid or cid in incoming_by_id:
+            continue
+        incoming_by_id[cid] = row
+        incoming_order.append(cid)
+    out: list[dict[str, Any]] = []
+    seen: set[str] = set()
+    for raw in existing:
+        if not isinstance(raw, dict):
+            continue
+        cid = str(raw.get("id") or "").strip()
+        if cid and cid in incoming_by_id:
+            out.append(incoming_by_id[cid])
+            seen.add(cid)
+        else:
+            out.append(dict(raw))
+            if cid:
+                seen.add(cid)
+    for cid in incoming_order:
+        if cid not in seen:
+            out.append(incoming_by_id[cid])
+    return out
+
+
+def apply_ingest_candidates(
+    existing: list[Any],
+    incoming: list[dict[str, Any]],
+    *,
+    replace: bool,
+    has_more: bool,
+) -> list[dict[str, Any]]:
+    if replace:
+        if has_more:
+            raise IngestError(
+                "incomplete_replace",
+                "slim has_more=true; refusing to wholesale replace candidates with a partial page "
+                "(omit --replace-candidates to merge by id)",
+            )
+        return [dict(row) for row in incoming]
+    return merge_candidates_by_id(existing, incoming)
 
 
 def ingest_x_bookmark_increments(
@@ -541,31 +639,32 @@ def ingest_x_bookmark_increments(
     *,
     slim_path: Path | str | None = None,
     seen_path: Path | None = None,
-) -> list[dict[str, Any]]:
+) -> SlimIngestResult:
     """Read Firstmate-side X MCP slim JSON; never invent tweet ids/urls.
 
     Path: env X_BOOKMARKS_SLIM_PATH, else tracking/inbox/x-bookmarks-slim-latest.json,
     else tracking/inbox/x-bookmarks-slim.json. Official X App / X_BEARER_TOKEN is
-    not mainline (captain order 2026-09-16). Missing file → candidates=[].
+    not mainline (captain order 2026-09-16). Missing file → incoming=[].
 
     Period filter is [period_start, period_end) on bookmarked_at/bookmarkedAt,
     else created_at. Skip tracking/seen-bookmarks.json ids.
+    Corrupt seen file or unreadable slim JSON raises IngestError (fail closed).
     """
     path = resolve_slim_path(slim_path)
     if path is None:
         print(
             "X ingest: skipped (no Firstmate X MCP slim JSON at "
             "X_BOOKMARKS_SLIM_PATH / tracking/inbox/x-bookmarks-slim-latest.json / "
-            "tracking/inbox/x-bookmarks-slim.json); candidates=[]",
+            "tracking/inbox/x-bookmarks-slim.json); incoming=[]",
             file=sys.stderr,
         )
-        return []
+        return SlimIngestResult(incoming=[], path=None, slim_found=False, has_more=False)
 
     try:
         data = load_json(path)
     except (OSError, json.JSONDecodeError, UnicodeDecodeError, TypeError, ValueError) as exc:
-        print(f"X ingest: failed to parse {path}: {exc}; candidates=[]", file=sys.stderr)
-        return []
+        print(f"X ingest: failed to parse {path}: {exc}", file=sys.stderr)
+        raise IngestError("parse_failed", f"failed to read/parse {path}: {exc}") from exc
 
     start = period_start.astimezone(timezone.utc)
     end = period_end.astimezone(timezone.utc)
@@ -573,8 +672,9 @@ def ingest_x_bookmark_increments(
     skipped_seen = 0
     skipped_window = 0
     skipped_bad = 0
-    candidates: list[dict[str, Any]] = []
+    incoming: list[dict[str, Any]] = []
     used_ids: set[str] = set()
+    has_more = slim_has_more(data)
 
     for item in slim_item_rows(data):
         stamp = item_period_timestamp(item)
@@ -597,20 +697,32 @@ def ingest_x_bookmark_increments(
             skipped_bad += 1
             continue
         used_ids.add(row["id"])
-        candidates.append(row)
+        incoming.append(row)
 
     print(
         f"X ingest: {path} period {iso_z(start)} .. {iso_z(end)}; "
-        f"new={len(candidates)} skipped_seen={skipped_seen} "
+        f"incoming={len(incoming)} has_more={has_more} skipped_seen={skipped_seen} "
         f"skipped_out_of_window={skipped_window} skipped_bad={skipped_bad}",
         file=sys.stderr,
     )
-    return candidates
+    return SlimIngestResult(
+        incoming=incoming,
+        path=path,
+        slim_found=True,
+        has_more=has_more,
+        skipped_seen=skipped_seen,
+        skipped_window=skipped_window,
+        skipped_bad=skipped_bad,
+    )
 
 
-def run_ingest_only(*, dry_run: bool) -> int:
-    """Refresh current ballot-window.json candidates from slim JSON; do not settle."""
+def run_ingest_only(*, dry_run: bool, replace_candidates: bool) -> int:
+    """Refresh current ballot-window.json candidates from slim JSON; do not settle.
+
+    Default is merge-by-id (keep existing open candidates absent from this slim page).
+    """
     ballot = load_json(BALLOT_PATH)
+    existing = list(ballot.get("candidates") or [])
     opens = parse_iso(str(ballot["opensAt"]))
     closes = parse_iso(str(ballot["closesAt"]))
     slim = resolve_slim_path()
@@ -620,16 +732,39 @@ def run_ingest_only(*, dry_run: bool) -> int:
             file=sys.stderr,
         )
         return 0
-    candidates = ingest_x_bookmark_increments(opens, closes)
-    note = ingest_note_zh(len(candidates), slim_found=True)
+    try:
+        result = ingest_x_bookmark_increments(opens, closes)
+        candidates = apply_ingest_candidates(
+            existing,
+            result.incoming,
+            replace=replace_candidates,
+            has_more=result.has_more,
+        )
+    except IngestError as exc:
+        print(f"ABORT ingest-only: {exc}", file=sys.stderr)
+        if exc.code == "parse_failed" and not dry_run:
+            ballot["ingestNoteZh"] = ingest_note_zh(
+                len(existing), slim_found=True, parse_failed=True, merged=not replace_candidates
+            )
+            dump_json(BALLOT_PATH, ballot)
+        return 2
+    note = ingest_note_zh(
+        len(candidates),
+        slim_found=True,
+        has_more=result.has_more,
+        merged=not replace_candidates,
+    )
     summary = {
         "action": "ingest_only",
         "windowId": ballot.get("windowId"),
         "opensAt": ballot.get("opensAt"),
         "closesAt": ballot.get("closesAt"),
-        "slimPath": str(slim),
+        "slimPath": str(result.path or slim),
+        "hasMore": result.has_more,
+        "replaceCandidates": replace_candidates,
         "candidateCount": len(candidates),
         "candidateIds": [c.get("id") for c in candidates],
+        "incomingIds": [c.get("id") for c in result.incoming],
     }
     print(json.dumps(summary, ensure_ascii=False, indent=2))
     if dry_run:
@@ -884,11 +1019,12 @@ def self_test_ingest() -> None:
         missing = ingest_x_bookmark_increments(
             start, end, slim_path=tmp_path / "missing.json", seen_path=seen
         )
-        assert missing == []
+        assert missing.incoming == []
+        assert missing.slim_found is False
 
         got = ingest_x_bookmark_increments(start, end, slim_path=slim, seen_path=seen)
-        assert [row["id"] for row in got] == [in_id], [row["id"] for row in got]
-        row = got[0]
+        assert [row["id"] for row in got.incoming] == [in_id], [row["id"] for row in got.incoming]
+        row = got.incoming[0]
         assert row["url"] == f"https://x.com/alice/status/{in_id}"
         assert row["author"] == "alice"
         assert row["status"] == "open"
@@ -900,7 +1036,7 @@ def self_test_ingest() -> None:
         os.environ["X_BOOKMARKS_SLIM_PATH"] = str(slim)
         try:
             via_env = ingest_x_bookmark_increments(start, end, seen_path=seen)
-            assert [row["id"] for row in via_env] == [in_id]
+            assert [row["id"] for row in via_env.incoming] == [in_id]
         finally:
             if previous_env is None:
                 os.environ.pop("X_BOOKMARKS_SLIM_PATH", None)
@@ -924,7 +1060,7 @@ def self_test_ingest() -> None:
                 ]
             },
         )
-        assert ingest_x_bookmark_increments(start, end, slim_path=prefer, seen_path=seen) == []
+        assert ingest_x_bookmark_increments(start, end, slim_path=prefer, seen_path=seen).incoming == []
 
         camel = tmp_path / "camel.json"
         dump_json(
@@ -943,8 +1079,64 @@ def self_test_ingest() -> None:
             },
         )
         camel_got = ingest_x_bookmark_increments(start, end, slim_path=camel, seen_path=seen)
-        assert [row["id"] for row in camel_got] == ["1999000000000000005"]
-        assert camel_got[0]["titleZh"] == "书签时间在窗内，发帖时间在窗外"
+        assert [row["id"] for row in camel_got.incoming] == ["1999000000000000005"]
+        assert camel_got.incoming[0]["titleZh"] == "书签时间在窗内，发帖时间在窗外"
+
+        # Merge-by-id keeps existing open candidates absent from a partial has_more page.
+        existing_keep = {
+            "id": "1999000000000000009",
+            "url": "https://x.com/keep/status/1999000000000000009",
+            "titleZh": "既有候选",
+            "author": "keep",
+            "planZh": "保留",
+            "suggestedSlug": "keep",
+            "status": "open",
+        }
+        payload_more = dict(payload)
+        payload_more["has_more"] = True
+        dump_json(slim, payload_more)
+        partial = ingest_x_bookmark_increments(start, end, slim_path=slim, seen_path=seen)
+        assert partial.has_more is True
+        merged = apply_ingest_candidates(
+            [existing_keep], partial.incoming, replace=False, has_more=True
+        )
+        assert [row["id"] for row in merged] == ["1999000000000000009", in_id]
+        try:
+            apply_ingest_candidates([existing_keep], partial.incoming, replace=True, has_more=True)
+            raise AssertionError("replace + has_more must refuse")
+        except IngestError as exc:
+            assert exc.code == "incomplete_replace"
+        replaced = apply_ingest_candidates(
+            [existing_keep], partial.incoming, replace=True, has_more=False
+        )
+        assert [row["id"] for row in replaced] == [in_id]
+
+        # Corrupt seen file fails closed (does not treat as empty seen).
+        bad_seen = tmp_path / "seen-bad.json"
+        bad_seen.write_text("{not json", encoding="utf-8")
+        try:
+            ingest_x_bookmark_increments(start, end, slim_path=slim, seen_path=bad_seen)
+            raise AssertionError("corrupt seen must abort")
+        except IngestError as exc:
+            assert exc.code == "seen_corrupt"
+        bad_seen.write_text('{"version":1}\n', encoding="utf-8")
+        try:
+            load_seen_ids(bad_seen)
+            raise AssertionError("seen missing items must abort")
+        except IngestError as exc:
+            assert exc.code == "seen_corrupt"
+
+        # Slim exists but parse fails: note says 读取/解析失败, never 「无未见 id」.
+        bad_slim = tmp_path / "slim-bad.json"
+        bad_slim.write_text("{not json", encoding="utf-8")
+        try:
+            ingest_x_bookmark_increments(start, end, slim_path=bad_slim, seen_path=seen)
+            raise AssertionError("unreadable slim must abort")
+        except IngestError as exc:
+            assert exc.code == "parse_failed"
+        parse_note = ingest_note_zh(0, slim_found=True, parse_failed=True)
+        assert "解析失败" in parse_note or "读取" in parse_note
+        assert "无未见" not in parse_note
 
 
 def main() -> int:
@@ -957,13 +1149,18 @@ def main() -> int:
     parser.add_argument(
         "--ingest-only",
         action="store_true",
-        help="Refresh current ballot-window.json candidates from Firstmate X MCP slim JSON; do not settle.",
+        help="Merge Firstmate X MCP slim JSON into current ballot-window.json candidates; do not settle.",
+    )
+    parser.add_argument(
+        "--replace-candidates",
+        action="store_true",
+        help="Wholesale replace candidates from slim instead of merge-by-id. Refused when slim has_more=true.",
     )
     args = parser.parse_args()
     if args.self_test:
         return self_test()
     if args.ingest_only:
-        return run_ingest_only(dry_run=args.dry_run)
+        return run_ingest_only(dry_run=args.dry_run, replace_candidates=args.replace_candidates)
 
     cfg = load_json(CONFIG_PATH)
     arsenal = load_json(ARSENAL_PATH)
@@ -1022,7 +1219,21 @@ def main() -> int:
         want_start, want_end = next_window_after(closes, cfg)
 
     ingest_start, ingest_end = opens, closes
-    candidates = ingest_x_bookmark_increments(ingest_start, ingest_end)
+    try:
+        result = ingest_x_bookmark_increments(ingest_start, ingest_end)
+        candidates = apply_ingest_candidates(
+            [],
+            result.incoming,
+            replace=args.replace_candidates,
+            has_more=result.has_more,
+        )
+    except IngestError as exc:
+        print(
+            f"ABORT settle ingest: {exc}. "
+            "Not writing next ballot-window or vote-ledger; no git push.",
+            file=sys.stderr,
+        )
+        return 2
     options = active_options(arsenal)
     next_ballot = {
         "version": 1,
@@ -1033,7 +1244,12 @@ def main() -> int:
         "closesAt": iso_z(want_end),
         "candidates": candidates,
         "options": options,
-        "ingestNoteZh": ingest_note_zh(len(candidates), slim_found=resolve_slim_path() is not None),
+        "ingestNoteZh": ingest_note_zh(
+            len(candidates),
+            slim_found=result.slim_found,
+            has_more=result.has_more,
+            merged=not args.replace_candidates,
+        ),
     }
 
     print(
