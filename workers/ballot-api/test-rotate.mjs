@@ -514,18 +514,20 @@ test("writeStatus fail after persistWindow does not claim 未改窗 or clear har
     candidate: {}
   }));
   await kv.put("rotate-status", JSON.stringify({
-    action: "rotated",
-    ok: true,
+    action: "error",
+    ok: false,
+    error: "rotate_failed",
     needsGitPush: false,
     needsXIngest: false,
-    nextWindowId: "2026-09-15-16"
+    nextWindowId: "2026-09-15-16",
+    noteZh: "Worker Cron 失败，未改窗。勿在 Worker 内补跑 git / X / agy。"
   }));
   const origPut = kv.put.bind(kv);
   let statusPuts = 0;
   kv.put = async function (key, value, options) {
     if (key === "rotate-status") {
       statusPuts += 1;
-      if (statusPuts <= 2) throw new Error("status_put_failed");
+      if (statusPuts <= 1) throw new Error("status_put_failed");
     }
     return origPut(key, value, options);
   };
@@ -543,8 +545,9 @@ test("writeStatus fail after persistWindow does not claim 未改窗 or clear har
   assert.equal(status.nextWindowId, "2026-09-16-00");
   assert.doesNotMatch(String(status.noteZh || ""), /未改窗/);
   const stored = await kv.get("rotate-status", "json");
-  assert.notEqual(stored.action, "error");
-  assert.notEqual(stored.ok, false);
+  assert.equal(stored.action, "rotated");
+  assert.equal(stored.ok, true);
+  assert.equal(stored.error, undefined);
   assert.doesNotMatch(String(stored.noteZh || ""), /未改窗/);
   assert.equal(stored.needsGitPush, true);
   assert.equal(stored.needsXIngest, true);

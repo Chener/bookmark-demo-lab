@@ -439,28 +439,22 @@ export async function runRotate(env, opts) {
       return payload;
     } catch (_) {
       try {
-        await writeStatus(payload, false);
-        return payload;
+        const prior = await kv.get("rotate-status", "json");
+        const patched = Object.assign({}, prior || {}, {
+          ok: true,
+          action: payload.action,
+          needsGitPush: true,
+          needsXIngest: true,
+          settledWindowId: payload.settledWindowId,
+          nextWindowId: payload.nextWindowId,
+          noteZh: payload.noteZh || ""
+        });
+        delete patched.error;
+        await writeStatus(patched, false);
       } catch (__) {
-        try {
-          const prior = await kv.get("rotate-status", "json");
-          const patched = Object.assign({}, prior || {}, {
-            ok: true,
-            action: payload.action,
-            needsGitPush: true,
-            needsXIngest: true,
-            settledWindowId: payload.settledWindowId,
-            nextWindowId: payload.nextWindowId
-          });
-          if (/未改窗/.test(String(patched.noteZh || ""))) {
-            patched.noteZh = payload.noteZh || "";
-          }
-          await writeStatus(patched, false);
-        } catch (___) {
-          /* return in-memory flags-true status; never write 未改窗 */
-        }
-        return payload;
+        /* return in-memory flags-true status; never write 未改窗 */
       }
+      return payload;
     }
   };
 
