@@ -262,7 +262,7 @@
     const track = racer.el.querySelector(".track");
     const usable = Math.max(track.clientWidth - 62, 1);
     const wobble = Math.sin(state.t * (4.2 - racer.grip * 2.4) + racer.index) * (1 - racer.grip) * 7;
-    racer.kart.style.transform = `translate(${x * usable}px, calc(-50% + ${wobble}px))`;
+    racer.kart.style.transform = `translate(${x * usable - 8}px, calc(-50% + ${wobble}px))`;
     racer.kart.classList.toggle("is-spin", state.running && !racer.done && racer.v > 0.01);
     racer.bar.style.width = `${Math.min(100, x * 100)}%`;
     racer.bar.style.background = racer.accent;
@@ -373,7 +373,6 @@
     const tag = (ev.target && ev.target.tagName) || "";
     if (tag === "INPUT" || tag === "TEXTAREA") return;
     if (ev.code === "Space") {
-      if (ev.target && ev.target.closest && ev.target.closest("button")) return;
       ev.preventDefault();
       toggleRun();
     } else if (ev.key === "r" || ev.key === "R") {
@@ -381,7 +380,7 @@
     } else if (ev.key >= "1" && ev.key <= "4") {
       setFocus(RACERS[Number(ev.key) - 1].id);
     }
-  });
+  }, true);
 
   window.addEventListener("resize", () => {
     state.racers.forEach(paintKart);

@@ -607,3 +607,12 @@ h1 {
   .track { height: 56px; }
   .build { grid-template-columns: 1fr; }
 }
+
+@media (prefers-reduced-motion: reduce) {
+  .kart.is-spin .wheel { animation: none; }
+  .countdown {
+    font-size: 2.2rem;
+    text-shadow: none;
+    background: transparent;
+  }
+}
