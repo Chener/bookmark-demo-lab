@@ -14,8 +14,10 @@
  * POST /api/rotate-status/ack  (admin; clear needsGitPush / needsXIngest)
  * POST /api/rotate         (admin; same slim settle/open as Cron)
  *
- * Scheduled: Cloudflare Workers Cron Triggers UTC 0 0,8,16 * * *
- * (= Asia/Shanghai 08:00 / 16:00 / 00:00). Not crontab. Not Grok Bot.
+ * Scheduled: Cloudflare Workers Cron Triggers UTC */1 * * * * (every minute)
+ * so 10-minute vote windows are settled soon after closesAt.
+ * 8h UTC 0 0,8,16 * * * slots are deprecated as the primary narrative.
+ * Not crontab. Not Grok Bot.
  */
 
 import {
@@ -120,8 +122,11 @@ async function putWindow(request, env) {
     opensAt: String(body.opensAt),
     closesAt: String(body.closesAt),
     periodHours: Number(body.periodHours) || 8,
+    voteWindowMinutes: Number(body.voteWindowMinutes) || undefined,
+    timezone: body.timezone ? String(body.timezone) : undefined,
     candidates: Array.isArray(body.candidates) ? body.candidates : [],
-    options: optionsToArrays(body.options)
+    options: optionsToArrays(body.options),
+    ingestNoteZh: body.ingestNoteZh ? String(body.ingestNoteZh) : ""
   };
   await persistWindow(env.BALLOT_KV, snapshot);
   return json(env, request, { ok: true, windowId: snapshot.windowId });
@@ -377,6 +382,7 @@ async function fetchOriginWindow(env) {
     opensAt: String(data.opensAt),
     closesAt: String(data.closesAt),
     periodHours: Number(data.periodHours) || 8,
+    voteWindowMinutes: Number(data.voteWindowMinutes) || undefined,
     candidates: Array.isArray(data.candidates) ? data.candidates : [],
     options: optionsToArrays(data.options)
   };

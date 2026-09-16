@@ -2,9 +2,12 @@
 """Manual / admin fallback for ballot rotate.
 
 Primary scheduler is Cloudflare Workers Cron Triggers on workers/ballot-api
-(UTC 0 0,8,16 * * *). This script is not crontab and not a Grok Bot routine.
+(UTC */1 * * * *, every minute for 10-minute vote windows).
+8h UTC 0 0,8,16 * * * is deprecated as the main narrative.
+This script is not crontab and not a Grok Bot routine.
 
-Use when Cron failed or you need to git-sync KV snapshots. Does not use GitHub Issues.
+Use when Cron failed or you need to git-sync KV snapshots, or --ingest-only.
+Does not use GitHub Issues.
 """
 from __future__ import annotations
 
@@ -72,41 +75,88 @@ def parse_iso(value: str) -> datetime:
     return datetime.fromisoformat(raw).astimezone(timezone.utc)
 
 
-def slot_hours(cfg: dict) -> list[int]:
-    slots = cfg.get("slotHours")
-    if isinstance(slots, list) and slots:
-        return sorted({int(h) % 24 for h in slots})
-    period = int(cfg.get("periodHours") or 8)
-    if period <= 0:
-        period = 8
-    return list(range(0, 24, period))
+def period_hours(cfg: dict) -> int:
+    try:
+        n = int(cfg.get("periodHours") or 8)
+    except (TypeError, ValueError):
+        n = 8
+    return n if n > 0 else 8
+
+
+def vote_window_minutes(cfg: dict) -> int:
+    """Source of truth for closesAt - opensAt. voteWindowMinutes wins; else periodHours * 60.
+
+    Bad / non-positive values fall back (same as Worker JS) so a rotate-config typo
+    does not abort ingest while the Worker keeps running.
+    """
+    raw = cfg.get("voteWindowMinutes") if cfg else None
+    if raw is not None and raw != "":
+        try:
+            n = int(raw)
+            if n > 0:
+                return n
+        except (TypeError, ValueError):
+            pass
+    return period_hours(cfg or {}) * 60
+
+
+STAMP_SLACK_MINUTES = 1
+
+
+def span_minutes(opens: datetime, closes: datetime) -> int | None:
+    try:
+        sec = (closes - opens).total_seconds()
+    except (TypeError, ValueError, OSError):
+        return None
+    if sec <= 0:
+        return None
+    return max(1, int(round(sec / 60)))
+
+
+def should_stamp_vote_window_minutes(
+    opens: datetime,
+    closes: datetime,
+    cfg: dict,
+    slack: int = STAMP_SLACK_MINUTES,
+) -> bool:
+    """True only when opens→closes already matches config minutes (±slack).
+
+    Do not stamp voteWindowMinutes:10 onto a leftover 8h window (same windowId PUT).
+    """
+    cfg_m = vote_window_minutes(cfg)
+    span = span_minutes(opens, closes)
+    if span is None:
+        return False
+    return abs(span - cfg_m) <= slack
+
+
+def apply_vote_window_minutes_stamp(ballot: dict, cfg: dict, *, opens: datetime, closes: datetime) -> None:
+    if should_stamp_vote_window_minutes(opens, closes, cfg):
+        ballot["voteWindowMinutes"] = vote_window_minutes(cfg)
+    else:
+        ballot.pop("voteWindowMinutes", None)
 
 
 def tzinfo(cfg: dict) -> ZoneInfo:
     return ZoneInfo(str(cfg.get("timezone") or "Asia/Shanghai"))
 
 
-def period_hours(cfg: dict) -> int:
-    n = int(cfg.get("periodHours") or 8)
-    return n if n > 0 else 8
-
-
-def window_id_for(start_local: datetime) -> str:
+def window_id_for(start_local: datetime, cfg: dict | None = None) -> str:
+    minutes = vote_window_minutes(cfg) if cfg is not None else None
+    if minutes is not None and (minutes % 60 != 0 or start_local.minute != 0):
+        return start_local.strftime("%Y-%m-%d-") + f"{start_local.hour:02d}{start_local.minute:02d}"
     return start_local.strftime("%Y-%m-%d-") + f"{start_local.hour:02d}"
 
 
 def containing_window(now_utc: datetime, cfg: dict) -> tuple[datetime, datetime]:
     tz = tzinfo(cfg)
-    period = period_hours(cfg)
-    slots = slot_hours(cfg)
+    minutes = vote_window_minutes(cfg)
     now_local = now_utc.astimezone(tz)
-    hour = now_local.hour
-    if hour < slots[0]:
-        start = now_local.replace(hour=slots[-1], minute=0, second=0, microsecond=0) - timedelta(days=1)
-    else:
-        start_h = max(s for s in slots if s <= hour)
-        start = now_local.replace(hour=start_h, minute=0, second=0, microsecond=0)
-    end = start + timedelta(hours=period)
+    minute_of_day = now_local.hour * 60 + now_local.minute
+    slot_start = (minute_of_day // minutes) * minutes
+    start_h, start_min = divmod(slot_start, 60)
+    start = now_local.replace(hour=start_h, minute=start_min, second=0, microsecond=0)
+    end = start + timedelta(minutes=minutes)
     return start, end
 
 
@@ -164,7 +214,7 @@ def vote_api_base(cfg: dict) -> str:
 
 
 def window_rank(window: dict | None) -> tuple[float | None, str] | None:
-    """Comparable rank: opensAt epoch when parseable, then sortable windowId (YYYY-MM-DD-HH)."""
+    """Comparable rank: opensAt epoch when parseable, then sortable windowId (YYYY-MM-DD-HH or HHMM)."""
     if not isinstance(window, dict):
         return None
     wid = str(window.get("windowId") or "").strip()
@@ -193,6 +243,33 @@ def is_strictly_ahead(candidate: dict | None, baseline: dict | None) -> bool:
     if c_ts is not None and b_ts is not None and c_ts != b_ts:
         return c_ts > b_ts
     return c_id > b_id
+
+
+def may_put_local_window(local: dict | None, remote: dict | None) -> tuple[bool, str]:
+    """Admin PUT local ballot onto Worker only if same windowId or local is strictly ahead.
+
+    If Worker Cron already rotated past git tracking/ballot-window.json, skip PUT so
+    live Hub opensAt / closesAt / windowId are never rolled back.
+    """
+    local_id = str((local or {}).get("windowId") or "").strip()
+    remote_id = str((remote or {}).get("windowId") or "").strip()
+    if not remote_id:
+        return False, "no live Worker window; skip PUT (will not guess Hub clock)"
+    if local_id and local_id == remote_id:
+        return True, f"same windowId as live ({local_id}); PUT candidates"
+    if is_strictly_ahead(local, remote):
+        return True, (
+            f"git window strictly ahead of Worker ({local_id} vs {remote_id}); PUT to heal"
+        )
+    if is_strictly_ahead(remote, local):
+        return False, (
+            f"Worker Cron is strictly ahead ({remote.get('windowId')} opens "
+            f"{remote.get('opensAt')}; git JSON still {local.get('windowId')}); "
+            "skip PUT so live Hub opensAt/closesAt/windowId stay"
+        )
+    return False, (
+        f"git window {local_id or '?'} is not same or ahead of live {remote_id}; skip PUT"
+    )
 
 
 def fetch_worker_json(base: str, path: str) -> dict[str, Any] | None:
@@ -229,7 +306,16 @@ def fetch_worker_ledger(base: str) -> dict[str, Any] | None:
 def ballot_file_from_window(window: dict) -> dict[str, Any]:
     options = window.get("options") if isinstance(window.get("options"), dict) else {}
     candidates = window.get("candidates") if isinstance(window.get("candidates"), list) else []
-    return {
+    vote_minutes = window.get("voteWindowMinutes")
+    if vote_minutes:
+        vote_minutes = int(vote_minutes)
+    else:
+        try:
+            span = parse_iso(str(window.get("closesAt") or "")) - parse_iso(str(window.get("opensAt") or ""))
+            vote_minutes = max(1, int(round(span.total_seconds() / 60)))
+        except (TypeError, ValueError, OSError):
+            vote_minutes = None
+    out: dict[str, Any] = {
         "version": int(window.get("version") or 1),
         "windowId": str(window.get("windowId") or ""),
         "timezone": str(window.get("timezone") or "Asia/Shanghai"),
@@ -247,6 +333,9 @@ def ballot_file_from_window(window: dict) -> dict[str, Any]:
             or "本窗无新书签增量：Worker Cron 不抓 X。仍可投燃料 / harness / 7×24。"
         ),
     }
+    if vote_minutes:
+        out["voteWindowMinutes"] = vote_minutes
+    return out
 
 
 def ledger_file_from_remote(ledger: dict) -> dict[str, Any]:
@@ -720,7 +809,10 @@ def run_ingest_only(*, dry_run: bool, replace_candidates: bool) -> int:
     """Refresh current ballot-window.json candidates from slim JSON; do not settle.
 
     Default is merge-by-id (keep existing open candidates absent from this slim page).
+    Admin PUT only when git window is the same as live or strictly ahead.
+    If Worker Cron already rotated ahead, skip PUT (never roll back Hub clock).
     """
+    cfg = load_json(CONFIG_PATH) if CONFIG_PATH.exists() else {}
     ballot = load_json(BALLOT_PATH)
     existing = list(ballot.get("candidates") or [])
     opens = parse_iso(str(ballot["opensAt"]))
@@ -754,25 +846,42 @@ def run_ingest_only(*, dry_run: bool, replace_candidates: bool) -> int:
         has_more=result.has_more,
         merged=not replace_candidates,
     )
+    if should_stamp_vote_window_minutes(opens, closes, cfg):
+        ballot["voteWindowMinutes"] = vote_window_minutes(cfg)
+    else:
+        ballot.pop("voteWindowMinutes", None)
+    base = vote_api_base(cfg)
+    remote_window = fetch_worker_window(base)
+    put_ok, put_reason = may_put_local_window(ballot, remote_window)
     summary = {
         "action": "ingest_only",
         "windowId": ballot.get("windowId"),
         "opensAt": ballot.get("opensAt"),
         "closesAt": ballot.get("closesAt"),
+        "voteWindowMinutes": ballot.get("voteWindowMinutes"),
         "slimPath": str(result.path or slim),
         "hasMore": result.has_more,
         "replaceCandidates": replace_candidates,
         "candidateCount": len(candidates),
         "candidateIds": [c.get("id") for c in candidates],
         "incomingIds": [c.get("id") for c in result.incoming],
+        "putWindow": put_ok,
+        "putReason": put_reason,
     }
     print(json.dumps(summary, ensure_ascii=False, indent=2))
     if dry_run:
-        print("dry-run: would update tracking/ballot-window.json candidates + ingestNoteZh")
+        print(
+            "dry-run: would update tracking/ballot-window.json candidates + ingestNoteZh"
+            + ("; would PUT /api/window" if put_ok else f"; would skip PUT ({put_reason})")
+        )
         return 0
     ballot["candidates"] = candidates
     ballot["ingestNoteZh"] = note
     dump_json(BALLOT_PATH, ballot)
+    if put_ok:
+        put_window(base, os.environ.get("BALLOT_ADMIN_TOKEN", "").strip(), ballot)
+    else:
+        print(f"ingest-only: skip PUT /api/window — {put_reason}", file=sys.stderr)
     return 0
 
 
@@ -969,6 +1078,79 @@ def self_test() -> int:
     )
     assert maybe_commit_push("x", no_git=True, no_push=False, dry_run=False) == "no_git"
     assert maybe_commit_push("x", no_git=False, no_push=False, dry_run=True) == "dry_run"
+
+    git_w = {
+        "windowId": "2026-09-16-0800",
+        "opensAt": "2026-09-16T00:00:00.000Z",
+        "closesAt": "2026-09-16T00:10:00.000Z",
+    }
+    live_same = {
+        "windowId": "2026-09-16-0800",
+        "opensAt": "2026-09-16T00:00:00.000Z",
+        "closesAt": "2026-09-16T00:10:00.000Z",
+    }
+    live_ahead = {
+        "windowId": "2026-09-16-0810",
+        "opensAt": "2026-09-16T00:10:00.000Z",
+        "closesAt": "2026-09-16T00:20:00.000Z",
+    }
+    ok, reason = may_put_local_window(git_w, live_same)
+    assert ok is True and "same windowId" in reason
+    skip, reason = may_put_local_window(git_w, live_ahead)
+    assert skip is False and "strictly ahead" in reason and "skip PUT" in reason
+    heal, reason = may_put_local_window(live_ahead, git_w)
+    assert heal is True and "strictly ahead" in reason
+    none_ok, reason = may_put_local_window(git_w, None)
+    assert none_ok is False and "no live" in reason
+    assert vote_window_minutes({"voteWindowMinutes": "nope", "periodHours": 8}) == 8 * 60
+    assert vote_window_minutes({"voteWindowMinutes": "", "periodHours": 2}) == 2 * 60
+    assert vote_window_minutes({"voteWindowMinutes": -3, "periodHours": 8}) == 8 * 60
+    assert vote_window_minutes({"voteWindowMinutes": 10}) == 10
+    cfg10 = {**cfg, "voteWindowMinutes": 10}
+    opens8 = parse_iso("2026-09-16T00:00:00.000Z")
+    closes8 = parse_iso("2026-09-16T08:00:00.000Z")
+    assert should_stamp_vote_window_minutes(opens8, closes8, cfg10) is False
+    stale = {
+        "windowId": "2026-09-16-08",
+        "opensAt": "2026-09-16T00:00:00.000Z",
+        "closesAt": "2026-09-16T08:00:00.000Z",
+        "voteWindowMinutes": 10,
+    }
+    apply_vote_window_minutes_stamp(stale, cfg10, opens=opens8, closes=closes8)
+    assert "voteWindowMinutes" not in stale
+    opens10 = parse_iso("2026-09-16T00:00:00.000Z")
+    closes10 = parse_iso("2026-09-16T00:10:00.000Z")
+    assert should_stamp_vote_window_minutes(opens10, closes10, cfg10) is True
+    fresh = {
+        "windowId": "2026-09-16-0800",
+        "opensAt": "2026-09-16T00:00:00.000Z",
+        "closesAt": "2026-09-16T00:10:00.000Z",
+    }
+    apply_vote_window_minutes_stamp(fresh, cfg10, opens=opens10, closes=closes10)
+    assert fresh["voteWindowMinutes"] == 10
+    closes11 = parse_iso("2026-09-16T00:11:00.000Z")
+    assert should_stamp_vote_window_minutes(opens10, closes11, cfg10) is True
+    closes12 = parse_iso("2026-09-16T00:12:00.000Z")
+    assert should_stamp_vote_window_minutes(opens10, closes12, cfg10) is False
+
+    now10 = parse_iso("2026-09-16T00:03:00.000Z")  # 08:03 Shanghai
+    s10, e10 = containing_window(now10, cfg10)
+    assert iso_z(s10) == "2026-09-16T00:00:00.000Z"
+    assert iso_z(e10) == "2026-09-16T00:10:00.000Z"
+    assert (e10 - s10) == timedelta(minutes=10)
+    assert window_id_for(s10, cfg10) == "2026-09-16-0800"
+    now10b = parse_iso("2026-09-16T00:14:00.000Z")  # 08:14 Shanghai
+    s10b, e10b = containing_window(now10b, cfg10)
+    assert iso_z(s10b) == "2026-09-16T00:10:00.000Z"
+    assert iso_z(e10b) == "2026-09-16T00:20:00.000Z"
+    assert window_id_for(s10b, cfg10) == "2026-09-16-0810"
+    close10 = parse_iso("2026-09-16T00:10:00.000Z")
+    n10s, n10e = next_window_after(close10, cfg10)
+    assert iso_z(n10s) == "2026-09-16T00:10:00.000Z"
+    assert iso_z(n10e) == "2026-09-16T00:20:00.000Z"
+    assert vote_window_minutes(cfg10) == 10
+    assert vote_window_minutes(cfg) == 8 * 60
+
     self_test_ingest()
     print("self-test ok")
     return 0
@@ -1225,7 +1407,7 @@ def main() -> int:
     # Never reopen the window we just settled; if still inside it (or exactly on close), advance.
     if (
         want_start.astimezone(timezone.utc) <= closes
-        or window_id_for(want_start) == ballot.get("windowId")
+        or window_id_for(want_start, cfg) == ballot.get("windowId")
     ):
         want_start, want_end = next_window_after(closes, cfg)
 
@@ -1248,7 +1430,7 @@ def main() -> int:
     options = active_options(arsenal)
     next_ballot = {
         "version": 1,
-        "windowId": window_id_for(want_start),
+        "windowId": window_id_for(want_start, cfg),
         "timezone": cfg.get("timezone") or "Asia/Shanghai",
         "periodHours": period_hours(cfg),
         "opensAt": iso_z(want_start),
@@ -1256,12 +1438,13 @@ def main() -> int:
         "candidates": candidates,
         "options": options,
         "ingestNoteZh": ingest_note_zh(
-            len(candidates),
+            len(result.incoming),
             slim_found=result.slim_found,
             has_more=result.has_more,
             merged=not args.replace_candidates,
         ),
     }
+    apply_vote_window_minutes_stamp(next_ballot, cfg, opens=want_start, closes=want_end)
 
     print(
         json.dumps(

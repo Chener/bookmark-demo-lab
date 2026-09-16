@@ -1,10 +1,14 @@
 # rotate-beat
 
-**主调度：Cloudflare Workers Cron Triggers**（`workers/ballot-api`，UTC `0 0,8,16 * * *` ≡ 上海 08:00 / 16:00 / 00:00）。
+**主调度：Cloudflare Workers Cron Triggers**（`workers/ballot-api`，UTC `*/1 * * * *` 每分钟，以赶上 10 分钟投票窗的 `closesAt`）。
 
-本脚本是 **人工 / 管理员回退**（KV 已转窗后把 JSON 同步进 git，或 Cron 故障时补跑）。**不要**用本机 crontab，**不要**用 Grok Bot routines，**不要**用 GitHub Issue / 评论当票箱。
+旧 8h 表达式 `0 0,8,16 * * *`（上海 08:00 / 16:00 / 00:00）**已降级，不再是主叙事**。
 
-Worker Cron 只做：KV 读计票 → 结算上一窗 → 打开下一窗写入 KV。不跑 git、不抓 X、不跑 agy / 演示构建。需要 X ingest 或 git push 时看 `GET /api/rotate-status` 的 `needsGitPush` / `needsXIngest`。这些标志只在成功 `rotated` / `bootstrapped` 时置 true；**skip / lock / 失败会读-合并-写，沿用旧值**。Harness 完成后 `POST /api/rotate-status/ack` 显式清掉。
+本脚本是 **人工 / 管理员回退**（KV 已转窗后把 JSON 同步进 git，或 Cron 故障时补跑；以及 `--ingest-only` 把 Firstmate slim 合并进当前窗）。**不要**用本机 crontab，**不要**用 Grok Bot routines，**不要**用 GitHub Issue / 评论当票箱。
+
+Worker Cron 只做：KV 读计票 → 结算上一窗 → 打开下一窗写入 KV（时长来自 `voteWindowMinutes`，默认须由 `tracking/rotate-config.json` 提供；冷启动无配置时仍用遗留 `periodHours`）。不跑 git、不抓 X、不跑 agy / 演示构建。需要 X ingest 或 git push 时看 `GET /api/rotate-status` 的 `needsGitPush` / `needsXIngest`。这些标志只在成功 `rotated` / `bootstrapped` 时置 true；**skip / lock / 失败会读-合并-写，沿用旧值**。Harness 完成后 `POST /api/rotate-status/ack` 显式清掉。
+
+空候选时 Worker **仍开窗**。隐藏投票 UI **不在本 Worker 分支**：见 Hub UI 分支 `hub/v2-ui-realtime`（合并 `main` 后才出现在 `index.html`）。
 
 ## 前置
 
@@ -16,35 +20,37 @@ Worker Cron 只做：KV 读计票 → 结算上一窗 → 打开下一窗写入 
 
 ## Worker Cron（主路径）
 
-部署 `ballot-api` 后，Wrangler `[triggers] crons` 会在整点触发 `scheduled`：
+部署 `ballot-api` 后，Wrangler `[triggers] crons = ["*/1 * * * *"]` 每分钟触发 `scheduled`：
 
-1. `fetch` Pages `ORIGIN` 或 GitHub raw 的 `tracking/rotate-config.json`（失败则用 KV 缓存）读取 `periodHours` / `slotHours`
+1. `fetch` Pages `ORIGIN` 或 GitHub raw 的 `tracking/rotate-config.json`（失败则用 KV 缓存）读取 `voteWindowMinutes`（主）/ 遗留 `periodHours`
 2. 读 KV `current-window`（没有则 fetch `ballot-window.json`）
 3. 窗未关则跳过
 4. 读 KV `tally:{windowId}` 结算 `winningStack`（真实零票 → `autoPick=true`；缺 tally 当零票）
-5. 打开下一上海窗，写入 KV `current-window` / `window-meta:` / `vote-ledger`
+5. 打开下一上海窗（`closesAt = opensAt + voteWindowMinutes`；按时长在时区向下取整对齐，10 分钟窗 `windowId` 为 `YYYY-MM-DD-HHMM`），写入 KV `current-window` / `window-meta:` / `vote-ledger`
 6. 置 `rotate-status.needsGitPush=true`、`needsXIngest=true` 给后续 harness（后续 skip 不会清掉）
 
-`periodHours` 改为 `2` 或 `1` 时，同步改 `slotHours` **以及** `wrangler.toml` 的 cron 表达式。
+**部署顺序：** Pages 先（或同时）提供 `voteWindowMinutes: 10` 的 rotate-config，再 redeploy Worker。冷启动拉不到配置时不偷偷按 10 分钟 bootstrap。
 
 ## 本脚本回退步骤
 
 1. 读 `tracking/rotate-config.json`、`tracking/arsenal.json`、`tracking/ballot-window.json`
 2. 若当前窗仍未关闭则退出 0（`--force` 除外）
-3. 若 Worker `GET /api/window` **严格超前** git JSON（先比 `opensAt`，再比可排序 `windowId` `YYYY-MM-DD-HH`；不是「windowId 不相等就同步」）→ **同步 KV→git**（写入 `tracking/ballot-window.json` + `vote-ledger.json`，不伪造 X 书签）。**仅在 git commit 且 `git push` 成功后** 才 `POST /api/rotate-status/ack` 清 `needsGitPush`。`--no-git` / `--no-push` / push 失败 **不清** 标志。然后退出 0，不 settle。
+3. 若 Worker `GET /api/window` **严格超前** git JSON（先比 `opensAt`，再比可排序 `windowId`；10 分钟窗为 `YYYY-MM-DD-HHMM`）→ **同步 KV→git**（写入 `tracking/ballot-window.json` + `vote-ledger.json`，不伪造 X 书签）。**仅在 git commit 且 `git push` 成功后** 才 `POST /api/rotate-status/ack` 清 `needsGitPush`。`--no-git` / `--no-push` / push 失败 **不清** 标志。然后退出 0，不 settle。
    - 若 **git 超前** Worker：不覆盖 tracking JSON，不 ack。可选且默认：`PUT /api/window` 把 git 快照写回 Worker 以修复分脑（需 `BALLOT_ADMIN_TOKEN`）。然后继续用 git JSON 走后面步骤。
 4. `GET {voteApiBase}/api/vote?windowId={prev}` 计票，写入 `tracking/vote-ledger.json`
    - **真实零票**（接口 `ok` 且 `voteCount=0`）→ `winningStack.autoPick = true`
    - **接口失败 / `voteApiBase` 为空 / 传输错误** → **中止 settle**（非 0 退出）
    - 燃料 / harness / 7×24 按票数取胜；平票按军火库 active 顺序
 5. **X ingest（Firstmate X MCP slim）**：刚结束窗 `[opensAt, closesAt)` 的书签增量。优先 `bookmarked_at` / `bookmarkedAt`，否则 `created_at`。跳过 `tracking/seen-bookmarks.json` 已有 id。无 slim 文件则 `candidates=[]`，绝不伪造。默认 **按 id 合并**（不因本页缺失而删既有 open 候选）。`has_more=true` 时拒绝 `--replace-candidates` 整表替换。seen 文件损坏或 slim 解析失败则 **中止**（非 0）。
-6. 按上海 `slotHours` 打开下一窗，重写 `ballot-window.json`
+6. 按 `voteWindowMinutes` 打开下一窗，重写 `ballot-window.json`
 7. `PUT {voteApiBase}/api/window` 把新窗快照写入 KV（需 `BALLOT_ADMIN_TOKEN`）
 8. `git add tracking/ballot-window.json tracking/vote-ledger.json && git commit && git push`
 
 ## X 书签 ingest（Firstmate X MCP）
 
 主线是 Firstmate 用自有 X MCP `get_users_bookmarks` 写成 slim JSON（见 `tracking/inbox/README.md`），**不是**官方自建 X App。Worker Cron **不**抓 X。
+
+Firstmate 建议每 **5–15 分钟** 轮询 MCP 书签（按页计费）。不要为了填窗伪造条目。
 
 约定：
 
@@ -56,8 +62,9 @@ Worker Cron 只做：KV 读计票 → 结算上一窗 → 打开下一窗写入 
 - `--replace-candidates`：故意全量替换；若 slim `has_more=true` 则拒绝并保持原候选
 - `tracking/seen-bookmarks.json` 读失败 / 结构损坏 → 中止 ingest（不当成「谁都没见过」）
 - slim 文件存在但 JSON 解析失败 → 中止；`ingestNoteZh` 写「读取/解析失败」，不写「无未见 id」
+- `--ingest-only` 的 `ingestNoteZh` 按 **本页 incoming** 计数，不是合并后总数
 
-窗未关时只刷新当前 `tracking/ballot-window.json` 的候选（不 settle）：
+窗未关时只刷新当前 `tracking/ballot-window.json` 的候选（不 settle）。`PUT /api/window` **有门闸**：仅当 git 窗与 live **同一 windowId**，或 git **严格超前** Worker 时才 PUT；若 Worker Cron 已转到更新的窗，**跳过 PUT**（明确打日志），绝不回滚 live Hub 的 `opensAt` / `closesAt` / `windowId`。拉不到 live 窗也不 PUT。
 
 ```bash
 python3 scripts/rotate-beat.py --ingest-only
@@ -68,7 +75,7 @@ X_BOOKMARKS_SLIM_PATH=tracking/inbox/x-bookmarks-slim-latest.json python3 script
 python3 scripts/rotate-beat.py --ingest-only --replace-candidates
 ```
 
-`--ingest-only` 默认按当前窗 `[opensAt, closesAt)` **合并** `candidates` 并更新 `ingestNoteZh`。slim 文件缺失时保持原候选不动。同步枢纽仍需管理员 `PUT /api/window`。
+`--ingest-only` 默认按当前窗 `[opensAt, closesAt)` **合并** `candidates` 并更新 `ingestNoteZh`。slim 文件缺失时保持原候选不动。
 
 ## 运行
 

@@ -10,7 +10,7 @@
 apps/<slug>/                      # 每个选题一个自包含演示
 tracking/seen-bookmarks.json      # 已做成应用的 id / url / 技术栈；枢纽运行时读取
 tracking/arsenal.json             # 军火库：燃料 / harness / 7×24（仅 active 可投票）
-tracking/rotate-config.json       # 轮转：时区、periodHours、slotHours、voteApiBase
+tracking/rotate-config.json       # 轮转：时区、voteWindowMinutes（主）、periodHours 遗留、voteApiBase
 tracking/ballot-window.json      # 当前投票窗 + 待投票候选 + 可选项
 tracking/vote-ledger.json         # 上一窗结算账本（winningStack / autoPick）
 workers/ballot-api/               # 唯一后端：投票 + KV + Workers Cron Triggers
@@ -22,22 +22,23 @@ index.html                        # 枢纽：卡片 + 待投票 + 军火库 + �
 
 唯一例外：静态 Pages **无法按 IP 做「每窗一票」**，因此本仓库附带 **一个** Worker + KV（`workers/ballot-api/`）：`GET/POST /api/vote`、窗快照、以及 **Cloudflare Workers Cron Triggers** 的 slim 转窗。不要再加第二个 Worker 或 Pages Function。仓库里是 `wrangler.toml.example`，避免 Pages 误走 Workers Builds。
 
-## 8 小时投票轮转（上海）
+## 10 分钟投票轮转（上海）
 
-Captain 产品节拍默认 **Asia/Shanghai、periodHours=8**，整点窗 **00:00 / 08:00 / 16:00**。`periodHours` 允许改为 **2** 或 **1**（同时改 `slotHours` 与 Wrangler cron）。
+Captain 产品节拍默认 **Asia/Shanghai、`voteWindowMinutes=10`**（写在 `tracking/rotate-config.json`）：`closesAt = opensAt + 10 分钟`。窗在时区内按该时长 **向下取整对齐**（不再读 `slotHours`）。Worker Cron **每分钟**（UTC `*/1 * * * *`）结算刚关闭的窗。旧的 **8 小时整点窗**（`periodHours=8`、cron `0 0,8,16 * * *`）只作为遗留字段保留，**不再是主叙事**。
 
 每个 beat：
 
 1. **结算刚结束的投票窗**（Worker Cron 读 KV 计票）→ 选出下一场演示的燃料 / harness / 7×24。零票则 `winningStack.autoPick=true`，编排器从军火库 **active** 项自选。
-2. **打开下一窗** 写入 KV。X 书签增量与 git 同步 **不在 Worker 内执行**；只置 `rotate-status.needsXIngest` / `needsGitPush` 给后续 harness。无 X 凭证则 `candidates=[]`，**绝不伪造书签**。
+2. **打开下一 10 分钟窗** 写入 KV（即使 `candidates=[]`）。空候选时 **隐藏投票 UI 不在本 Worker 分支**：见 Hub UI 分支 `hub/v2-ui-realtime`（合并 `main` 后才出现在 `index.html`）。X 书签增量与 git 同步 **不在 Worker 内执行**；只置 `rotate-status.needsXIngest` / `needsGitPush` 给后续 harness。候选项主线是 Firstmate X MCP slim ingest（**不要** `X_BEARER_TOKEN`），**绝不伪造书签**。
 
 ### 配置旋钮（`tracking/rotate-config.json`）
 
 | 字段 | 说明 |
 | --- | --- |
 | `timezone` | `Asia/Shanghai` |
-| `periodHours` | 默认 `8`；允许 `2` 或 `1` |
-| `slotHours` | 默认 `[0, 8, 16]`。2h 用偶数点，1h 用 `0..23` |
+| `voteWindowMinutes` | **主字段**（rotate-config 提供）；`closesAt` 以此为准。Worker 冷启动未拉到配置时**不用** 10 分钟，而用 `periodHours` |
+| `periodHours` | 遗留；无有效 `voteWindowMinutes` 时 Worker/python 用 `periodHours * 60` 分钟 |
+| `slotHours` | 遗留、**不再参与开窗**。窗按上海时钟对 `voteWindowMinutes`（或 `periodHours*60`）向下取整对齐 |
 | `voteApiBase` | Vote Worker 根 URL，如 `https://ballot-api.<account>.workers.dev`。空字符串表示走同源 `/api/vote`（需在 **现有** Pages 主机绑路由） |
 
 ### 枢纽投票 UX
@@ -63,7 +64,7 @@ npx wrangler kv namespace create ballot-votes
 
 # 2) 确认 wrangler.toml：
 #    name = "ballot-api"
-#    [triggers] crons = ["0 0,8,16 * * *"]
+#    [triggers] crons = ["*/1 * * * *"]
 #    [vars] ORIGIN = 现有 Pages 生产 URL（如 https://bookmark-demo-lab.pages.dev）
 #    [vars] RAW_BASE = https://raw.githubusercontent.com/Chener/bookmark-demo-lab/main
 
@@ -81,7 +82,7 @@ npx wrangler deploy
 | --- | --- | --- |
 | Worker | `ballot-api` | **1** |
 | KV namespace | `ballot-votes`（binding `BALLOT_KV`） | **1** |
-| Cron Trigger | UTC `0 0,8,16 * * *` | 挂在上述 Worker 上 |
+| Cron Trigger | UTC `*/1 * * * *`（每分钟；旧 8h `0 0,8,16 * * *` 已弃用为主路径） | 挂在上述 Worker 上 |
 | 路由 | `https://ballot-api.<account>.workers.dev` | workers.dev，不要自定义域 |
 | 可选同源 | 在 **已有** Pages 主机加 Worker 路由 `…pages.dev/api/*`，然后 `voteApiBase=""` | 仍是这一个 Worker |
 
@@ -91,16 +92,16 @@ Worker CORS **只允许** `ORIGIN`（wrangler `[vars]`）与 `localhost` / `127.
 
 ### Cron（Cloudflare Workers Cron Triggers，主路径）
 
-调度在 **Cloudflare Workers Cron Triggers** 上，表达式 UTC `0 0,8,16 * * *`（`00:00/08:00/16:00` UTC ≡ 上海 `08:00/16:00/00:00`）。**不是**本机 crontab，**不是** Grok Bot。
+调度在 **Cloudflare Workers Cron Triggers** 上，表达式 UTC `*/1 * * * *`（每分钟），以便赶上 10 分钟窗的 `closesAt`。旧 8h 表达式 `0 0,8,16 * * *` 不再作为主路径。**不是**本机 crontab，**不是** Grok Bot。
 
-`scheduled` 只做 CPU 很轻的事（Free 约 10ms）：KV 读写 + `fetch` Pages / GitHub raw 的 `rotate-config.json` / `arsenal.json` / `ballot-window.json`。`periodHours` / `slotHours` 以 rotate-config（拉取或 KV 缓存）为准。结算语义与 `scripts/rotate-beat.py` 相同，但：
+`scheduled` 只做 CPU 很轻的事（Free 约 10ms）：KV 读写 + `fetch` Pages / GitHub raw 的 `rotate-config.json` / `arsenal.json` / `ballot-window.json`。`voteWindowMinutes` 以 rotate-config（拉取或 KV 缓存）为准，`closesAt = opensAt + voteWindowMinutes`。结算语义与 `scripts/rotate-beat.py` 相同，但：
 
 - 计票直接读 KV `tally:{windowId}`（不 HTTP 自己、不 `gh issue`）
 - 账本与下一窗快照写 KV（`vote-ledger`、`current-window`）
 - **不**跑 agy、git、X 抓取、重演示构建
 - 若还需要 X ingest / git push，只写 KV `rotate-status`（`needsGitPush` / `needsXIngest`）给后续 harness。**skip / lock / 失败不会清掉这些标志**；harness 完成后 `POST /api/rotate-status/ack`（Bearer `BALLOT_ADMIN_TOKEN`，body 里把对应字段设为 `false`）。
 
-改 `periodHours` 时同步改 `slotHours` 与 `wrangler.toml` 的 cron，然后 `npx wrangler deploy`。
+改 `voteWindowMinutes` 后确认 `wrangler.toml` 的 cron 仍足够密（10 分钟窗用 `*/1 * * * *`），然后在本机 `npx wrangler deploy` **同一个** `ballot-api`（不要新开 Worker 项目）。**部署顺序：** 先让 Pages / `main` 提供带 `voteWindowMinutes: 10` 的 `tracking/rotate-config.json`，再（或同时）redeploy Worker。Worker 冷启动 `defaultConfig` 在拉不到配置、KV 也没有缓存时仍用遗留 `periodHours=8`，**不会**在缺配置时偷偷按 10 分钟 bootstrap。
 
 管理员可 `POST /api/rotate`（Bearer `BALLOT_ADMIN_TOKEN`）手动跑同一套 slim 转窗。`scripts/rotate-beat.py` 仅作回退：Worker **严格超前** git 时才 `GET /api/window` + `/api/ledger` 写入 tracking JSON 并在 **commit+push 成功后** ack `needsGitPush`；git 超前时不覆盖 JSON，可 PUT 回 Worker。Cron 故障时才自己 settle。详见 `scripts/rotate-beat.md`。
 

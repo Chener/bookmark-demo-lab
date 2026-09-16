@@ -14,10 +14,10 @@ binding = "BALLOT_KV"
 id = "REPLACE_WITH_KV_NAMESPACE_ID"
 
 # Cloudflare Workers Cron Triggers (UTC). NOT local crontab, NOT Grok Bot.
-# 00:00 / 08:00 / 16:00 UTC ≡ Asia/Shanghai 08:00 / 16:00 / 00:00.
-# If you change periodHours/slotHours, change this expression to match.
+# Primary: every minute so 10-minute vote windows are settled near closesAt.
+# 8h expression 0 0,8,16 * * * is deprecated as the main narrative.
 [triggers]
-crons = ["0 0,8,16 * * *"]
+crons = ["*/1 * * * *"]
 
 [vars]
 # Production Pages origin (Worker fetches rotate-config / ballot-window / arsenal).

@@ -1,9 +1,11 @@
 /**
- * Slim 8h (or 2h/1h) ballot rotate for Cloudflare Workers Cron Triggers.
- * Window math matches scripts/rotate-beat.py. No git, X, agy, or demo builds.
+ * Slim ballot rotate for Cloudflare Workers Cron Triggers.
+ * Window length comes from fetched rotate-config voteWindowMinutes; if that
+ * field is missing, duration is periodHours (cold/legacy, default 8h).
+ * Windows are floor-aligned in timezone by that duration. No git, X, agy, or demo builds.
  */
 
-export const CRON_UTC = "0 0,8,16 * * *";
+export const CRON_UTC = "*/1 * * * *";
 export const CONFIG_TTL_S = 60 * 60 * 24 * 7;
 export const LEDGER_TTL_S = 60 * 60 * 24 * 14;
 export const STATUS_TTL_S = 60 * 60 * 24 * 14;
@@ -17,7 +19,6 @@ export function kvTtl(seconds) {
 
 const DEFAULT_TZ = "Asia/Shanghai";
 const DEFAULT_PERIOD = 8;
-const DEFAULT_SLOTS = [0, 8, 16];
 
 export function isoZ(ms) {
   const d = new Date(ms);
@@ -41,22 +42,11 @@ export function periodHours(cfg) {
   return n > 0 ? n : DEFAULT_PERIOD;
 }
 
-export function slotHours(cfg) {
-  const slots = cfg && cfg.slotHours;
-  if (Array.isArray(slots) && slots.length) {
-    const uniq = [];
-    slots.forEach(function (h) {
-      const n = Number(h) % 24;
-      const v = n < 0 ? n + 24 : n;
-      if (uniq.indexOf(v) === -1) uniq.push(v);
-    });
-    uniq.sort(function (a, b) { return a - b; });
-    return uniq;
-  }
-  const period = periodHours(cfg);
-  const out = [];
-  for (let h = 0; h < 24; h += period) out.push(h);
-  return out;
+/** Source of truth for closesAt - opensAt. voteWindowMinutes wins; else periodHours * 60. */
+export function voteWindowMinutes(cfg) {
+  const n = Number(cfg && cfg.voteWindowMinutes);
+  if (Number.isFinite(n) && n > 0) return Math.floor(n);
+  return periodHours(cfg) * 60;
 }
 
 export function timezone(cfg) {
@@ -84,17 +74,19 @@ export function zonedParts(ms, timeZone) {
     year: Number(map.year),
     month: Number(map.month),
     day: Number(map.day),
-    hour: hour
+    hour: hour,
+    minute: Number(map.minute) || 0
   };
 }
 
-export function wallToUtcMs(year, month, day, hour, timeZone) {
-  let utc = Date.UTC(year, month - 1, day, hour, 0, 0);
+export function wallToUtcMs(year, month, day, hour, timeZone, minute) {
+  const min = Number(minute) || 0;
+  let utc = Date.UTC(year, month - 1, day, hour, min, 0);
   const tz = timeZone || DEFAULT_TZ;
   for (let i = 0; i < 4; i++) {
     const p = zonedParts(utc, tz);
-    const got = Date.UTC(p.year, p.month - 1, p.day, p.hour, 0, 0);
-    const want = Date.UTC(year, month - 1, day, hour, 0, 0);
+    const got = Date.UTC(p.year, p.month - 1, p.day, p.hour, Number(p.minute) || 0, 0);
+    const want = Date.UTC(year, month - 1, day, hour, min, 0);
     const delta = want - got;
     if (delta === 0) return utc;
     utc += delta;
@@ -102,48 +94,37 @@ export function wallToUtcMs(year, month, day, hour, timeZone) {
   return utc;
 }
 
-function addCalendarDays(year, month, day, n) {
-  const dt = new Date(Date.UTC(year, month - 1, day + n));
-  return {
-    year: dt.getUTCFullYear(),
-    month: dt.getUTCMonth() + 1,
-    day: dt.getUTCDate()
-  };
-}
-
 export function windowIdFor(startLocal) {
   const y = String(startLocal.year).padStart(4, "0");
   const m = String(startLocal.month).padStart(2, "0");
   const d = String(startLocal.day).padStart(2, "0");
   const h = String(startLocal.hour).padStart(2, "0");
+  if (Object.prototype.hasOwnProperty.call(startLocal, "minute")) {
+    const mi = String(Number(startLocal.minute) || 0).padStart(2, "0");
+    return y + "-" + m + "-" + d + "-" + h + mi;
+  }
   return y + "-" + m + "-" + d + "-" + h;
 }
 
 export function containingWindow(nowMs, cfg) {
   const tz = timezone(cfg);
-  const period = periodHours(cfg);
-  const slots = slotHours(cfg);
+  const minutes = voteWindowMinutes(cfg);
   const local = zonedParts(nowMs, tz);
-  const hour = local.hour;
-  let startY = local.year;
-  let startM = local.month;
-  let startD = local.day;
-  let startH;
-  if (hour < slots[0]) {
-    const prev = addCalendarDays(local.year, local.month, local.day, -1);
-    startY = prev.year;
-    startM = prev.month;
-    startD = prev.day;
-    startH = slots[slots.length - 1];
-  } else {
-    startH = 0;
-    for (let i = 0; i < slots.length; i++) {
-      if (slots[i] <= hour) startH = slots[i];
-    }
+  const minuteOfDay = local.hour * 60 + (Number(local.minute) || 0);
+  const slotStart = Math.floor(minuteOfDay / minutes) * minutes;
+  const startH = Math.floor(slotStart / 60);
+  const startMin = slotStart % 60;
+  const startLocal = {
+    year: local.year,
+    month: local.month,
+    day: local.day,
+    hour: startH
+  };
+  if (minutes % 60 !== 0 || startMin !== 0) {
+    startLocal.minute = startMin;
   }
-  const startLocal = { year: startY, month: startM, day: startD, hour: startH };
-  const startMs = wallToUtcMs(startY, startM, startD, startH, tz);
-  const endMs = startMs + period * 3600 * 1000;
+  const startMs = wallToUtcMs(startLocal.year, startLocal.month, startLocal.day, startH, tz, startMin);
+  const endMs = startMs + minutes * 60 * 1000;
   return { startMs: startMs, endMs: endMs, startLocal: startLocal };
 }
 
@@ -243,12 +224,13 @@ export function nextBallotSnapshot(nowMs, closesMs, ballot, cfg, options) {
     windowId: windowIdFor(win.startLocal),
     timezone: timezone(cfg),
     periodHours: periodHours(cfg),
+    voteWindowMinutes: voteWindowMinutes(cfg),
     opensAt: isoZ(win.startMs),
     closesAt: isoZ(win.endMs),
     candidates: candidates,
     options: options || { fuel: [], harness: [], environment: [] },
     ingestNoteZh:
-      "本窗无新书签增量：Worker Cron 不抓 X、不跑 git / agy。X ingest 与 JSON 入库由后续 harness 根据 KV rotate-status 处理。仍可投燃料 / harness / 7×24。"
+      "本窗无新书签增量：Worker Cron 不抓 X、不跑 git / agy。候选项由 Firstmate X MCP slim ingest（无 X_BEARER 主线）写入。空候选时本 Worker 仍开窗；隐藏投票 UI 在 Hub UI 分支 hub/v2-ui-realtime（合并 main 后才出现在枢纽页）。仍可投燃料 / harness / 7×24。"
   };
 }
 
@@ -259,21 +241,24 @@ export function bootstrapBallot(nowMs, cfg, options) {
     windowId: windowIdFor(win.startLocal),
     timezone: timezone(cfg),
     periodHours: periodHours(cfg),
+    voteWindowMinutes: voteWindowMinutes(cfg),
     opensAt: isoZ(win.startMs),
     closesAt: isoZ(win.endMs),
     candidates: [],
     options: options || { fuel: [], harness: [], environment: [] },
     ingestNoteZh:
-      "Worker Cron 首次打开本窗（KV 无快照）。不抓 X、不跑 git。仍可投燃料 / harness / 7×24。"
+      "Worker Cron 首次打开本窗（KV 无快照）。不抓 X、不跑 git。候选项靠 Firstmate MCP slim ingest。仍可投燃料 / harness / 7×24。"
   };
 }
 
 export function windowSnapshot(ballot) {
+  const minutes = snapshotVoteWindowMinutes(ballot);
   return {
     windowId: String(ballot.windowId),
     opensAt: String(ballot.opensAt),
     closesAt: String(ballot.closesAt),
     periodHours: Number(ballot.periodHours) || DEFAULT_PERIOD,
+    voteWindowMinutes: minutes,
     timezone: String(ballot.timezone || DEFAULT_TZ),
     candidates: Array.isArray(ballot.candidates) ? ballot.candidates : [],
     options: ballot.options || { fuel: [], harness: [], environment: [] },
@@ -281,11 +266,23 @@ export function windowSnapshot(ballot) {
   };
 }
 
+function snapshotVoteWindowMinutes(ballot) {
+  const n = Number(ballot && ballot.voteWindowMinutes);
+  if (Number.isFinite(n) && n > 0) return Math.floor(n);
+  const opens = parseIso(ballot && ballot.opensAt);
+  const closes = parseIso(ballot && ballot.closesAt);
+  if (Number.isFinite(opens) && Number.isFinite(closes) && closes > opens) {
+    return Math.max(1, Math.round((closes - opens) / 60000));
+  }
+  return periodHours({ periodHours: ballot && ballot.periodHours }) * 60;
+}
+
 export function defaultConfig() {
+  // Legacy 8h until rotate-config.json is fetched. Do not silently bootstrap 10m.
+  // Deploy Pages rotate-config (voteWindowMinutes: 10) before or with Worker redeploy.
   return {
     timezone: DEFAULT_TZ,
-    periodHours: DEFAULT_PERIOD,
-    slotHours: DEFAULT_SLOTS.slice()
+    periodHours: DEFAULT_PERIOD
   };
 }
 
@@ -317,7 +314,7 @@ export async function fetchFirstJson(urls, fetchImpl) {
 
 export async function loadRotateConfig(env, fetchImpl) {
   const fetched = await fetchFirstJson(trackingUrls(env, "rotate-config.json"), fetchImpl);
-  if (fetched && (fetched.periodHours || fetched.slotHours)) {
+  if (fetched && (fetched.voteWindowMinutes || fetched.periodHours || fetched.slotHours)) {
     try {
       await env.BALLOT_KV.put("rotate-config", JSON.stringify(fetched), {
         expirationTtl: kvTtl(CONFIG_TTL_S)
@@ -328,7 +325,7 @@ export async function loadRotateConfig(env, fetchImpl) {
     return fetched;
   }
   const cached = await env.BALLOT_KV.get("rotate-config", "json");
-  if (cached && (cached.periodHours || cached.slotHours)) return cached;
+  if (cached && (cached.voteWindowMinutes || cached.periodHours || cached.slotHours)) return cached;
   return defaultConfig();
 }
 
