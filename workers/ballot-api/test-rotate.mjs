@@ -10,7 +10,10 @@ import {
   nextBallotSnapshot,
   runRotate,
   ackRotateFlags,
-  periodHours
+  periodHours,
+  LOCK_TTL_S,
+  KV_MIN_TTL_S,
+  kvTtl
 } from "./src/rotate.js";
 
 const CFG = {
@@ -26,6 +29,7 @@ function parseIso(value) {
 class MemKV {
   constructor() {
     this.map = new Map();
+    this.puts = [];
   }
   async get(key, type) {
     const v = this.map.get(key);
@@ -33,8 +37,12 @@ class MemKV {
     if (type === "json") return JSON.parse(v);
     return v;
   }
-  async put(key, value) {
+  async put(key, value, options) {
+    this.puts.push({ key: key, value: value, options: options || {} });
     this.map.set(key, typeof value === "string" ? value : JSON.stringify(value));
+  }
+  async delete(key) {
+    this.map.delete(key);
   }
 }
 
@@ -389,4 +397,99 @@ test("ack endpoint clears only requested harness flags", async () => {
   assert.equal(both.status.needsXIngest, false);
   const missing = await ackRotateFlags(new MemKV(), { needsGitPush: false });
   assert.equal(missing.ok, false);
+});
+
+test("kvTtl clamps Cloudflare KV expirationTtl to at least 60s", () => {
+  assert.equal(KV_MIN_TTL_S, 60);
+  assert.ok(LOCK_TTL_S >= 60);
+  assert.equal(kvTtl(8), 60);
+  assert.equal(kvTtl(25), 60);
+  assert.equal(kvTtl(59), 60);
+  assert.equal(kvTtl(60), 60);
+  assert.equal(kvTtl(90), 90);
+  assert.equal(kvTtl(NaN), 60);
+});
+
+test("claimLock puts rotate-lock with clamped TTL >= 60 and releases it", async () => {
+  const kv = new MemKV();
+  await kv.put("current-window", JSON.stringify({
+    windowId: "2026-09-15-16",
+    opensAt: "2026-09-15T08:00:00.000Z",
+    closesAt: "2026-09-15T16:00:00.000Z",
+    periodHours: 8,
+    candidates: [],
+    options: { fuel: ["Cursor Ultra"], harness: ["Cursor Cloud Agent"], environment: ["Cursor Cloud Agent 托管机"] }
+  }));
+  kv.puts = [];
+  const env = { BALLOT_KV: kv, ORIGIN: "https://bookmark-demo-lab.pages.dev" };
+  const status = await runRotate(env, {
+    nowMs: parseIso("2026-09-15T12:29:00.000Z"),
+    skipLock: false,
+    fetchImpl: mockFetch()
+  });
+  assert.equal(status.action, "skipped_open");
+  const lockPuts = kv.puts.filter(function (p) { return p.key === "rotate-lock"; });
+  assert.ok(lockPuts.length >= 1);
+  const ttl = lockPuts[0].options.expirationTtl;
+  assert.ok(ttl >= 60);
+  assert.equal(ttl, kvTtl(LOCK_TTL_S));
+  assert.equal(await kv.get("rotate-lock"), null);
+});
+
+test("runRotate unexpected throw writes fail status instead of bubbling", async () => {
+  const kv = new MemKV();
+  await kv.put("rotate-status", JSON.stringify({
+    action: "rotated",
+    needsGitPush: true,
+    needsXIngest: true
+  }));
+  const origGet = kv.get.bind(kv);
+  kv.get = async function (key, type) {
+    if (key === "current-window") throw new Error("kv_unavailable");
+    return origGet(key, type);
+  };
+  const env = { BALLOT_KV: kv, ORIGIN: "https://bookmark-demo-lab.pages.dev" };
+  const status = await runRotate(env, {
+    nowMs: parseIso("2026-09-15T12:29:00.000Z"),
+    skipLock: true,
+    fetchImpl: mockFetch()
+  });
+  assert.equal(status.ok, false);
+  assert.equal(status.action, "error");
+  assert.equal(status.error, "kv_unavailable");
+  assert.equal(status.needsGitPush, true);
+  assert.equal(status.needsXIngest, true);
+  const stored = await origGet("rotate-status", "json");
+  assert.equal(stored.ok, false);
+  assert.equal(stored.error, "kv_unavailable");
+  assert.equal(stored.needsGitPush, true);
+  assert.equal(stored.needsXIngest, true);
+});
+
+test("claimLock KV put throw writes rotate-status instead of bubbling", async () => {
+  const kv = new MemKV();
+  await kv.put("rotate-status", JSON.stringify({
+    action: "rotated",
+    needsGitPush: true,
+    needsXIngest: false
+  }));
+  const origPut = kv.put.bind(kv);
+  kv.put = async function (key, value, options) {
+    if (key === "rotate-lock") throw new Error("Expiration TTL must be at least 60.");
+    return origPut(key, value, options);
+  };
+  const env = { BALLOT_KV: kv, ORIGIN: "https://bookmark-demo-lab.pages.dev" };
+  const status = await runRotate(env, {
+    nowMs: parseIso("2026-09-15T12:29:00.000Z"),
+    skipLock: false,
+    fetchImpl: mockFetch()
+  });
+  assert.equal(status.ok, false);
+  assert.equal(status.action, "error");
+  assert.match(status.error, /Expiration TTL must be at least 60/);
+  assert.equal(status.needsGitPush, true);
+  assert.equal(status.needsXIngest, false);
+  const stored = await kv.get("rotate-status", "json");
+  assert.equal(stored.ok, false);
+  assert.match(stored.error, /Expiration TTL must be at least 60/);
 });

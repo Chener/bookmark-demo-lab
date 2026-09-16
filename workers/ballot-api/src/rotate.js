@@ -7,7 +7,13 @@ export const CRON_UTC = "0 0,8,16 * * *";
 export const CONFIG_TTL_S = 60 * 60 * 24 * 7;
 export const LEDGER_TTL_S = 60 * 60 * 24 * 14;
 export const STATUS_TTL_S = 60 * 60 * 24 * 14;
-export const LOCK_TTL_S = 25;
+export const KV_MIN_TTL_S = 60;
+// Short-lived rotate lock. Cloudflare KV requires expirationTtl >= 60.
+export const LOCK_TTL_S = 60;
+
+export function kvTtl(seconds) {
+  return Math.max(KV_MIN_TTL_S, Number(seconds) || 0);
+}
 
 const DEFAULT_TZ = "Asia/Shanghai";
 const DEFAULT_PERIOD = 8;
@@ -314,7 +320,7 @@ export async function loadRotateConfig(env, fetchImpl) {
   if (fetched && (fetched.periodHours || fetched.slotHours)) {
     try {
       await env.BALLOT_KV.put("rotate-config", JSON.stringify(fetched), {
-        expirationTtl: CONFIG_TTL_S
+        expirationTtl: kvTtl(CONFIG_TTL_S)
       });
     } catch (_) {
       /* cache is best-effort */
@@ -342,13 +348,13 @@ async function claimLock(kv) {
   if (prior) return false;
   const nonce = (crypto.randomUUID && crypto.randomUUID()) ||
     String(Date.now()) + "-" + Math.random();
-  await kv.put("rotate-lock", nonce, { expirationTtl: LOCK_TTL_S });
+  await kv.put("rotate-lock", nonce, { expirationTtl: kvTtl(LOCK_TTL_S) });
   const stored = await kv.get("rotate-lock");
   return stored === nonce;
 }
 
 async function putJson(kv, key, value, ttl) {
-  await kv.put(key, JSON.stringify(value), { expirationTtl: ttl });
+  await kv.put(key, JSON.stringify(value), { expirationTtl: kvTtl(ttl) });
 }
 
 export async function persistWindow(kv, ballot) {
@@ -384,8 +390,7 @@ export async function runRotate(env, opts) {
   const fetchImpl = options.fetchImpl || fetch;
   const kv = env.BALLOT_KV;
   const started = isoZ(nowMs);
-  const priorStatus = await kv.get("rotate-status", "json");
-  const priorFlags = harnessFlagsFrom(priorStatus);
+  let priorFlags = { needsGitPush: false, needsXIngest: false };
 
   const writeStatus = async function (status, preserveHarnessFlags) {
     const next = Object.assign({}, status);
@@ -419,113 +424,131 @@ export async function runRotate(env, opts) {
     }
   };
 
-  if (!options.skipLock) {
-    const locked = await claimLock(kv);
-    if (!locked) {
-      return fail("locked");
-    }
-  }
-
-  let cfg;
+  let heldLock = false;
   try {
-    cfg = await loadRotateConfig(env, fetchImpl);
-  } catch (err) {
-    return fail("config_fetch_failed");
-  }
+    const priorStatus = await kv.get("rotate-status", "json");
+    priorFlags = harnessFlagsFrom(priorStatus);
 
-  let current = await kv.get("current-window", "json");
-  if (!current || !current.windowId) {
-    current = await loadBallotFallback(env, fetchImpl);
-  }
-
-  let arsenal = null;
-  try {
-    arsenal = await loadArsenal(env, fetchImpl);
-    if (arsenal) {
-      await putJson(kv, "arsenal", arsenal, CONFIG_TTL_S);
+    if (!options.skipLock) {
+      const locked = await claimLock(kv);
+      if (!locked) {
+        return await fail("locked");
+      }
+      heldLock = true;
     }
-  } catch (_) {
-    arsenal = await kv.get("arsenal", "json");
-  }
 
-  const optionsFromArsenal = activeOptions(arsenal);
-  const stackOptions = (optionsFromArsenal.fuel.length || optionsFromArsenal.harness.length)
-    ? optionsFromArsenal
-    : ((current && current.options) || { fuel: [], harness: [], environment: [] });
+    let cfg;
+    try {
+      cfg = await loadRotateConfig(env, fetchImpl);
+    } catch (err) {
+      return await fail("config_fetch_failed");
+    }
 
-  if (!current || !current.windowId) {
-    const boot = bootstrapBallot(nowMs, cfg, stackOptions);
-    await persistWindow(kv, boot);
+    let current = await kv.get("current-window", "json");
+    if (!current || !current.windowId) {
+      current = await loadBallotFallback(env, fetchImpl);
+    }
+
+    let arsenal = null;
+    try {
+      arsenal = await loadArsenal(env, fetchImpl);
+      if (arsenal) {
+        await putJson(kv, "arsenal", arsenal, CONFIG_TTL_S);
+      }
+    } catch (_) {
+      arsenal = await kv.get("arsenal", "json");
+    }
+
+    const optionsFromArsenal = activeOptions(arsenal);
+    const stackOptions = (optionsFromArsenal.fuel.length || optionsFromArsenal.harness.length)
+      ? optionsFromArsenal
+      : ((current && current.options) || { fuel: [], harness: [], environment: [] });
+
+    if (!current || !current.windowId) {
+      const boot = bootstrapBallot(nowMs, cfg, stackOptions);
+      await persistWindow(kv, boot);
+      const status = {
+        version: 1,
+        at: started,
+        cron: cron,
+        scheduledTime: isoZ(Number(options.scheduledTime) || nowMs),
+        ok: true,
+        action: "bootstrapped",
+        settledWindowId: null,
+        nextWindowId: boot.windowId,
+        voteCount: 0,
+        needsGitPush: true,
+        needsXIngest: true,
+        noteZh: "KV 无窗快照，已按 rotate-config 打开当前上海窗。请 harness 把 ballot-window 同步进 git；Worker 未抓 X。"
+      };
+      await writeStatus(status, false);
+      return status;
+    }
+
+    const closesMs = parseIso(current.closesAt);
+    const opensMs = parseIso(current.opensAt);
+    if (!Number.isFinite(closesMs) || !Number.isFinite(opensMs)) {
+      return await fail("invalid_window", { settledWindowId: current.windowId });
+    }
+
+    if (nowMs < closesMs && !force) {
+      const status = {
+        version: 1,
+        at: started,
+        cron: cron,
+        scheduledTime: isoZ(Number(options.scheduledTime) || nowMs),
+        ok: true,
+        action: "skipped_open",
+        settledWindowId: null,
+        nextWindowId: current.windowId,
+        voteCount: 0,
+        needsGitPush: priorFlags.needsGitPush,
+        needsXIngest: priorFlags.needsXIngest,
+        noteZh: "当前窗仍未关闭，Worker Cron 跳过。needsGitPush / needsXIngest 沿用上次成功转窗，直至 harness POST /api/rotate-status/ack。"
+      };
+      await writeStatus(status, true);
+      return status;
+    }
+
+    const tallies = (await kv.get("tally:" + current.windowId, "json")) || emptyTallies();
+    const settled = settleFromTallies(current, arsenal || { sections: [] }, {
+      ok: true,
+      voteCount: Number(tallies.voteCount) || 0,
+      tallies: tallies
+    }, nowMs);
+
+    const next = nextBallotSnapshot(nowMs, closesMs, current, cfg, stackOptions);
+    await putJson(kv, "vote-ledger", settled.ledger, LEDGER_TTL_S);
+    await persistWindow(kv, next);
+
     const status = {
       version: 1,
       at: started,
       cron: cron,
       scheduledTime: isoZ(Number(options.scheduledTime) || nowMs),
       ok: true,
-      action: "bootstrapped",
-      settledWindowId: null,
-      nextWindowId: boot.windowId,
-      voteCount: 0,
+      action: "rotated",
+      settledWindowId: settled.ledger.settledWindowId,
+      nextWindowId: next.windowId,
+      voteCount: settled.ledger.voteCount,
+      winningStack: settled.ledger.winningStack,
       needsGitPush: true,
       needsXIngest: true,
-      noteZh: "KV 无窗快照，已按 rotate-config 打开当前上海窗。请 harness 把 ballot-window 同步进 git；Worker 未抓 X。"
+      noteZh:
+        "Worker Cron 已在 KV 结算上一窗并打开下一窗。未跑 git / X / agy。harness 见 needsGitPush / needsXIngest；完成后 POST /api/rotate-status/ack。"
     };
     await writeStatus(status, false);
     return status;
+  } catch (err) {
+    const message = err && err.message ? String(err.message).slice(0, 200) : "rotate_failed";
+    return await fail(message || "rotate_failed");
+  } finally {
+    if (heldLock) {
+      try {
+        await kv.delete("rotate-lock");
+      } catch (_) {
+        /* lock TTL is the fallback */
+      }
+    }
   }
-
-  const closesMs = parseIso(current.closesAt);
-  const opensMs = parseIso(current.opensAt);
-  if (!Number.isFinite(closesMs) || !Number.isFinite(opensMs)) {
-    return fail("invalid_window", { settledWindowId: current.windowId });
-  }
-
-  if (nowMs < closesMs && !force) {
-    const status = {
-      version: 1,
-      at: started,
-      cron: cron,
-      scheduledTime: isoZ(Number(options.scheduledTime) || nowMs),
-      ok: true,
-      action: "skipped_open",
-      settledWindowId: null,
-      nextWindowId: current.windowId,
-      voteCount: 0,
-      needsGitPush: priorFlags.needsGitPush,
-      needsXIngest: priorFlags.needsXIngest,
-      noteZh: "当前窗仍未关闭，Worker Cron 跳过。needsGitPush / needsXIngest 沿用上次成功转窗，直至 harness POST /api/rotate-status/ack。"
-    };
-    await writeStatus(status, true);
-    return status;
-  }
-
-  const tallies = (await kv.get("tally:" + current.windowId, "json")) || emptyTallies();
-  const settled = settleFromTallies(current, arsenal || { sections: [] }, {
-    ok: true,
-    voteCount: Number(tallies.voteCount) || 0,
-    tallies: tallies
-  }, nowMs);
-
-  const next = nextBallotSnapshot(nowMs, closesMs, current, cfg, stackOptions);
-  await putJson(kv, "vote-ledger", settled.ledger, LEDGER_TTL_S);
-  await persistWindow(kv, next);
-
-  const status = {
-    version: 1,
-    at: started,
-    cron: cron,
-    scheduledTime: isoZ(Number(options.scheduledTime) || nowMs),
-    ok: true,
-    action: "rotated",
-    settledWindowId: settled.ledger.settledWindowId,
-    nextWindowId: next.windowId,
-    voteCount: settled.ledger.voteCount,
-    winningStack: settled.ledger.winningStack,
-    needsGitPush: true,
-    needsXIngest: true,
-    noteZh:
-      "Worker Cron 已在 KV 结算上一窗并打开下一窗。未跑 git / X / agy。harness 见 needsGitPush / needsXIngest；完成后 POST /api/rotate-status/ack。"
-  };
-  await writeStatus(status, false);
-  return status;
 }

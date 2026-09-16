@@ -25,12 +25,14 @@ import {
   runRotate,
   ackRotateFlags,
   trackingUrls,
-  fetchFirstJson
+  fetchFirstJson,
+  kvTtl
 } from "./rotate.js";
 
 const RL_WINDOW_S = 60;
 const RL_MAX = 12;
-const COOLDOWN_S = 8;
+// Vote cooldown is at least 60s due to Cloudflare KV expirationTtl minimum.
+const COOLDOWN_S = 60;
 const BODY_MAX = 4096;
 const FP_MAX = 128;
 const TALLY_TTL_S = 60 * 60 * 24 * 14;
@@ -285,7 +287,7 @@ async function postVote(request, env) {
   if (coolHit) {
     return json(env, request, { ok: false, error: "cooldown" }, 429);
   }
-  await env.BALLOT_KV.put(coolKey, "1", { expirationTtl: COOLDOWN_S });
+  await env.BALLOT_KV.put(coolKey, "1", { expirationTtl: kvTtl(COOLDOWN_S) });
 
   const claimed = await claimExclusive(env.BALLOT_KV, votedKey, ttl);
   if (!claimed) {
@@ -304,7 +306,7 @@ async function postVote(request, env) {
   bump(tallies.environment, environment);
   if (candidateId) bump(tallies.candidate, candidateId);
   tallies.voteCount = (Number(tallies.voteCount) || 0) + 1;
-  await env.BALLOT_KV.put(tallyKey, JSON.stringify(tallies), { expirationTtl: TALLY_TTL_S });
+  await env.BALLOT_KV.put(tallyKey, JSON.stringify(tallies), { expirationTtl: kvTtl(TALLY_TTL_S) });
 
   return json(env, request, {
     ok: true,
@@ -336,7 +338,7 @@ async function claimExclusive(kv, key, ttl) {
     Array.from(crypto.getRandomValues(new Uint8Array(16)))
       .map(function (b) { return b.toString(16).padStart(2, "0"); })
       .join("");
-  await kv.put(key, nonce, { expirationTtl: ttl });
+  await kv.put(key, nonce, { expirationTtl: kvTtl(ttl) });
   const stored = await kv.get(key);
   return stored === nonce;
 }
@@ -348,7 +350,7 @@ async function rateLimit(env, ip) {
   const key = "rl:" + hash;
   const n = Number(await env.BALLOT_KV.get(key)) || 0;
   if (n >= RL_MAX) return { ok: false };
-  await env.BALLOT_KV.put(key, String(n + 1), { expirationTtl: RL_WINDOW_S });
+  await env.BALLOT_KV.put(key, String(n + 1), { expirationTtl: kvTtl(RL_WINDOW_S) });
   return { ok: true };
 }
 
