@@ -10,7 +10,10 @@ import {
   nextBallotSnapshot,
   runRotate,
   ackRotateFlags,
-  periodHours
+  periodHours,
+  LOCK_TTL_S,
+  KV_MIN_TTL_S,
+  kvTtl
 } from "./src/rotate.js";
 
 const CFG = {
@@ -26,6 +29,7 @@ function parseIso(value) {
 class MemKV {
   constructor() {
     this.map = new Map();
+    this.puts = [];
   }
   async get(key, type) {
     const v = this.map.get(key);
@@ -33,8 +37,12 @@ class MemKV {
     if (type === "json") return JSON.parse(v);
     return v;
   }
-  async put(key, value) {
+  async put(key, value, options) {
+    this.puts.push({ key: key, value: value, options: options || {} });
     this.map.set(key, typeof value === "string" ? value : JSON.stringify(value));
+  }
+  async delete(key) {
+    this.map.delete(key);
   }
 }
 
@@ -389,4 +397,288 @@ test("ack endpoint clears only requested harness flags", async () => {
   assert.equal(both.status.needsXIngest, false);
   const missing = await ackRotateFlags(new MemKV(), { needsGitPush: false });
   assert.equal(missing.ok, false);
+});
+
+test("kvTtl clamps Cloudflare KV expirationTtl to at least 60s", () => {
+  assert.equal(KV_MIN_TTL_S, 60);
+  assert.ok(LOCK_TTL_S >= 60);
+  assert.equal(kvTtl(8), 60);
+  assert.equal(kvTtl(25), 60);
+  assert.equal(kvTtl(59), 60);
+  assert.equal(kvTtl(60), 60);
+  assert.equal(kvTtl(90), 90);
+  assert.equal(kvTtl(NaN), 60);
+});
+
+test("claimLock puts rotate-lock with clamped TTL >= 60 and releases it", async () => {
+  const kv = new MemKV();
+  await kv.put("current-window", JSON.stringify({
+    windowId: "2026-09-15-16",
+    opensAt: "2026-09-15T08:00:00.000Z",
+    closesAt: "2026-09-15T16:00:00.000Z",
+    periodHours: 8,
+    candidates: [],
+    options: { fuel: ["Cursor Ultra"], harness: ["Cursor Cloud Agent"], environment: ["Cursor Cloud Agent 托管机"] }
+  }));
+  kv.puts = [];
+  const env = { BALLOT_KV: kv, ORIGIN: "https://bookmark-demo-lab.pages.dev" };
+  const status = await runRotate(env, {
+    nowMs: parseIso("2026-09-15T12:29:00.000Z"),
+    skipLock: false,
+    fetchImpl: mockFetch()
+  });
+  assert.equal(status.action, "skipped_open");
+  const lockPuts = kv.puts.filter(function (p) { return p.key === "rotate-lock"; });
+  assert.ok(lockPuts.length >= 1);
+  const ttl = lockPuts[0].options.expirationTtl;
+  assert.ok(ttl >= 60);
+  assert.equal(ttl, kvTtl(LOCK_TTL_S));
+  assert.equal(await kv.get("rotate-lock"), null);
+});
+
+test("runRotate unexpected throw writes opaque rotate_failed instead of bubbling", async () => {
+  const kv = new MemKV();
+  await kv.put("rotate-status", JSON.stringify({
+    action: "rotated",
+    needsGitPush: true,
+    needsXIngest: true
+  }));
+  const origGet = kv.get.bind(kv);
+  kv.get = async function (key, type) {
+    if (key === "current-window") throw new Error("kv_unavailable");
+    return origGet(key, type);
+  };
+  const env = { BALLOT_KV: kv, ORIGIN: "https://bookmark-demo-lab.pages.dev" };
+  const status = await runRotate(env, {
+    nowMs: parseIso("2026-09-15T12:29:00.000Z"),
+    skipLock: true,
+    fetchImpl: mockFetch()
+  });
+  assert.equal(status.ok, false);
+  assert.equal(status.action, "error");
+  assert.equal(status.error, "rotate_failed");
+  assert.equal(status.needsGitPush, true);
+  assert.equal(status.needsXIngest, true);
+  const stored = await origGet("rotate-status", "json");
+  assert.equal(stored.ok, false);
+  assert.equal(stored.error, "rotate_failed");
+  assert.equal(stored.needsGitPush, true);
+  assert.equal(stored.needsXIngest, true);
+});
+
+test("claimLock KV put throw writes opaque rotate_failed instead of bubbling", async () => {
+  const kv = new MemKV();
+  await kv.put("rotate-status", JSON.stringify({
+    action: "rotated",
+    needsGitPush: true,
+    needsXIngest: false
+  }));
+  const origPut = kv.put.bind(kv);
+  kv.put = async function (key, value, options) {
+    if (key === "rotate-lock") throw new Error("Expiration TTL must be at least 60.");
+    return origPut(key, value, options);
+  };
+  const env = { BALLOT_KV: kv, ORIGIN: "https://bookmark-demo-lab.pages.dev" };
+  const status = await runRotate(env, {
+    nowMs: parseIso("2026-09-15T12:29:00.000Z"),
+    skipLock: false,
+    fetchImpl: mockFetch()
+  });
+  assert.equal(status.ok, false);
+  assert.equal(status.action, "error");
+  assert.equal(status.error, "rotate_failed");
+  assert.equal(status.needsGitPush, true);
+  assert.equal(status.needsXIngest, false);
+  const stored = await kv.get("rotate-status", "json");
+  assert.equal(stored.ok, false);
+  assert.equal(stored.error, "rotate_failed");
+  assert.equal(stored.needsGitPush, true);
+  assert.equal(stored.needsXIngest, false);
+});
+
+test("writeStatus fail after persistWindow does not claim 未改窗 or clear harness flags", async () => {
+  const kv = new MemKV();
+  await kv.put("current-window", JSON.stringify({
+    windowId: "2026-09-15-16",
+    opensAt: "2026-09-15T08:00:00.000Z",
+    closesAt: "2026-09-15T16:00:00.000Z",
+    periodHours: 8,
+    candidates: [],
+    options: { fuel: ["Cursor Ultra"], harness: ["Cursor Cloud Agent"], environment: ["Cursor Cloud Agent 托管机"] }
+  }));
+  await kv.put("tally:2026-09-15-16", JSON.stringify({
+    voteCount: 2,
+    fuel: { "Cursor Ultra": 2 },
+    harness: { "Cursor Cloud Agent": 2 },
+    environment: { "Cursor Cloud Agent 托管机": 2 },
+    candidate: {}
+  }));
+  await kv.put("rotate-status", JSON.stringify({
+    action: "error",
+    ok: false,
+    error: "rotate_failed",
+    needsGitPush: false,
+    needsXIngest: false,
+    nextWindowId: "2026-09-15-16",
+    noteZh: "Worker Cron 失败，未改窗。勿在 Worker 内补跑 git / X / agy。"
+  }));
+  const origPut = kv.put.bind(kv);
+  let statusPuts = 0;
+  kv.put = async function (key, value, options) {
+    if (key === "rotate-status") {
+      statusPuts += 1;
+      if (statusPuts <= 1) throw new Error("status_put_failed");
+    }
+    return origPut(key, value, options);
+  };
+  const env = { BALLOT_KV: kv, ORIGIN: "https://bookmark-demo-lab.pages.dev" };
+  const status = await runRotate(env, {
+    nowMs: parseIso("2026-09-15T16:00:00.000Z"),
+    skipLock: true,
+    fetchImpl: mockFetch()
+  });
+  assert.equal(status.ok, true);
+  assert.equal(status.action, "rotated");
+  assert.equal(status.needsGitPush, true);
+  assert.equal(status.needsXIngest, true);
+  assert.equal(status.settledWindowId, "2026-09-15-16");
+  assert.equal(status.nextWindowId, "2026-09-16-00");
+  assert.doesNotMatch(String(status.noteZh || ""), /未改窗/);
+  const stored = await kv.get("rotate-status", "json");
+  assert.equal(stored.action, "rotated");
+  assert.equal(stored.ok, true);
+  assert.equal(stored.error, undefined);
+  assert.doesNotMatch(String(stored.noteZh || ""), /未改窗/);
+  assert.equal(stored.needsGitPush, true);
+  assert.equal(stored.needsXIngest, true);
+  const next = await kv.get("current-window", "json");
+  assert.equal(next.windowId, "2026-09-16-00");
+});
+
+test("ledger put then persistWindow throw does not claim 未改窗", async () => {
+  const kv = new MemKV();
+  await kv.put("current-window", JSON.stringify({
+    windowId: "2026-09-15-16",
+    opensAt: "2026-09-15T08:00:00.000Z",
+    closesAt: "2026-09-15T16:00:00.000Z",
+    periodHours: 8,
+    candidates: [],
+    options: { fuel: ["Cursor Ultra"], harness: ["Cursor Cloud Agent"], environment: ["Cursor Cloud Agent 托管机"] }
+  }));
+  await kv.put("tally:2026-09-15-16", JSON.stringify({
+    voteCount: 1,
+    fuel: { "Cursor Ultra": 1 },
+    harness: { "Cursor Cloud Agent": 1 },
+    environment: { "Cursor Cloud Agent 托管机": 1 },
+    candidate: {}
+  }));
+  await kv.put("rotate-status", JSON.stringify({
+    action: "rotated",
+    ok: true,
+    needsGitPush: false,
+    needsXIngest: false
+  }));
+  const origPut = kv.put.bind(kv);
+  kv.put = async function (key, value, options) {
+    if (key === "current-window") throw new Error("window_put_failed");
+    return origPut(key, value, options);
+  };
+  const env = { BALLOT_KV: kv, ORIGIN: "https://bookmark-demo-lab.pages.dev" };
+  const status = await runRotate(env, {
+    nowMs: parseIso("2026-09-15T16:00:00.000Z"),
+    skipLock: true,
+    fetchImpl: mockFetch()
+  });
+  assert.equal(status.ok, true);
+  assert.equal(status.action, "rotated");
+  assert.equal(status.needsGitPush, true);
+  assert.equal(status.needsXIngest, true);
+  assert.equal(status.nextWindowId, "2026-09-16-00");
+  assert.equal(status.settledWindowId, "2026-09-15-16");
+  assert.doesNotMatch(String(status.noteZh || ""), /未改窗/);
+  const stored = await kv.get("rotate-status", "json");
+  assert.notEqual(stored.action, "error");
+  assert.notEqual(stored.ok, false);
+  assert.doesNotMatch(String(stored.noteZh || ""), /未改窗/);
+  assert.equal(stored.needsGitPush, true);
+  assert.equal(stored.needsXIngest, true);
+  const ledger = await kv.get("vote-ledger", "json");
+  assert.equal(ledger.settledWindowId, "2026-09-15-16");
+});
+
+test("window-meta put throw after current-window still sets harness flags true", async () => {
+  const kv = new MemKV();
+  await kv.put("current-window", JSON.stringify({
+    windowId: "2026-09-15-16",
+    opensAt: "2026-09-15T08:00:00.000Z",
+    closesAt: "2026-09-15T16:00:00.000Z",
+    periodHours: 8,
+    candidates: [],
+    options: { fuel: ["Cursor Ultra"], harness: ["Cursor Cloud Agent"], environment: ["Cursor Cloud Agent 托管机"] }
+  }));
+  await kv.put("tally:2026-09-15-16", JSON.stringify({
+    voteCount: 1,
+    fuel: { "Cursor Ultra": 1 },
+    harness: { "Cursor Cloud Agent": 1 },
+    environment: { "Cursor Cloud Agent 托管机": 1 },
+    candidate: {}
+  }));
+  await kv.put("rotate-status", JSON.stringify({
+    action: "rotated",
+    ok: true,
+    needsGitPush: false,
+    needsXIngest: false
+  }));
+  const origPut = kv.put.bind(kv);
+  kv.put = async function (key, value, options) {
+    if (String(key).indexOf("window-meta:") === 0) throw new Error("meta_put_failed");
+    return origPut(key, value, options);
+  };
+  const env = { BALLOT_KV: kv, ORIGIN: "https://bookmark-demo-lab.pages.dev" };
+  const status = await runRotate(env, {
+    nowMs: parseIso("2026-09-15T16:00:00.000Z"),
+    skipLock: true,
+    fetchImpl: mockFetch()
+  });
+  assert.equal(status.ok, true);
+  assert.equal(status.action, "rotated");
+  assert.equal(status.needsGitPush, true);
+  assert.equal(status.needsXIngest, true);
+  assert.doesNotMatch(String(status.noteZh || ""), /未改窗/);
+  const stored = await kv.get("rotate-status", "json");
+  assert.notEqual(stored.action, "error");
+  assert.doesNotMatch(String(stored.noteZh || ""), /未改窗/);
+  assert.equal(stored.needsGitPush, true);
+  assert.equal(stored.needsXIngest, true);
+  const next = await kv.get("current-window", "json");
+  assert.equal(next.windowId, "2026-09-16-00");
+});
+
+test("priorStatus get throw does not write fail status that clears harness flags", async () => {
+  const kv = new MemKV();
+  await kv.put("rotate-status", JSON.stringify({
+    action: "rotated",
+    ok: true,
+    needsGitPush: true,
+    needsXIngest: true
+  }));
+  const origGet = kv.get.bind(kv);
+  kv.get = async function (key, type) {
+    if (key === "rotate-status") throw new Error("status_unavailable");
+    return origGet(key, type);
+  };
+  const env = { BALLOT_KV: kv, ORIGIN: "https://bookmark-demo-lab.pages.dev" };
+  const status = await runRotate(env, {
+    nowMs: parseIso("2026-09-15T12:29:00.000Z"),
+    skipLock: true,
+    fetchImpl: mockFetch()
+  });
+  assert.equal(status.ok, false);
+  assert.equal(status.error, "rotate_failed");
+  const stored = await origGet("rotate-status", "json");
+  assert.equal(stored.action, "rotated");
+  assert.equal(stored.ok, true);
+  assert.equal(stored.needsGitPush, true);
+  assert.equal(stored.needsXIngest, true);
+  assert.doesNotMatch(String(stored.noteZh || ""), /未改窗/);
 });
