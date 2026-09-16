@@ -359,6 +359,17 @@
       -webkit-box-orient: vertical;
       overflow: hidden;
     }
+    .card .rationale {
+      color: var(--faint);
+      font-size: 0.74rem;
+      -webkit-line-clamp: 2;
+      line-clamp: 2;
+    }
+    .card .rationale::before {
+      content: "为何做 · ";
+      color: var(--accent);
+      font-weight: 600;
+    }
     .tags {
       display: flex;
       flex-wrap: wrap;
@@ -620,11 +631,12 @@
 
     <!-- 静态后备：无脚本或无法读取 tracking 时仍可浏览。成功读取 JSON 后由脚本替换。 -->
     <section class="grid" id="grid" aria-label="演示列表">
-      <article class="card" data-search="google-creator-kit google 创作者工具箱 google 创作者工具箱：7 种用法工位 google creator kit flow 批量做图、notebooklm 做 ppt，预算有限也能很香。 geekcatx 2099920497383440599 google ai pro · grok-4.6 google ai pro grok-4.6 cursor cloud agent cursor cloud agent 托管机">
+      <article class="card" data-search="google-creator-kit google 创作者工具箱 google 创作者工具箱：7 种用法工位 google creator kit flow 批量做图、notebooklm 做 ppt，预算有限也能很香。 原帖把 flow 做图、notebooklm 做 ppt 和视频反推收成预算创作者的 7 种用法，适合钉成一张可点工位。 geekcatx 2099920497383440599 google ai pro · grok-4.6 google ai pro grok-4.6 cursor cloud agent cursor cloud agent 托管机">
         <a class="card-body" href="apps/google-creator-kit/">
           <span class="slug">google-creator-kit</span>
           <h2>Google 创作者工具箱</h2>
           <p>Flow 批量做图、NotebookLM 做 PPT，预算有限也能很香。</p>
+          <p class="rationale">原帖把 Flow 做图、NotebookLM 做 PPT 和视频反推收成预算创作者的 7 种用法，适合钉成一张可点工位。</p>
           <div class="tags" aria-label="技术栈标签">
             <span class="tag tag-fuel" title="燃料：Google AI Pro · grok-4.6" aria-label="燃料：Google AI Pro · grok-4.6">Google AI Pro · grok-4.6</span>
             <span class="tag tag-harness" title="云端 harness：Cursor Cloud Agent" aria-label="云端 harness：Cursor Cloud Agent">Cursor Cloud Agent</span>
@@ -788,6 +800,7 @@
           item.titleZh,
           item.title,
           item.blurbZh,
+          item.rationaleZh,
           item.author,
           item.id,
           item.subscriptionZh,
@@ -838,6 +851,12 @@
           const p = document.createElement("p");
           p.textContent = item.blurbZh;
           body.append(p);
+        }
+        if (item.rationaleZh) {
+          const why = document.createElement("p");
+          why.className = "rationale";
+          why.textContent = item.rationaleZh;
+          body.append(why);
         }
 
         const tags = stackTags(item);
