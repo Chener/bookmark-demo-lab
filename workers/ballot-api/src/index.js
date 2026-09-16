@@ -170,7 +170,12 @@ async function postRotateAck(request, env) {
   const body = (await readJson(request)) || {};
   const result = await ackRotateFlags(env.BALLOT_KV, body);
   if (!result.ok) {
-    return json(env, request, { ok: false, error: result.error || "missing_status" }, 404);
+    const code = result.error === "pending_ledger" ? 409 : 404;
+    return json(env, request, {
+      ok: false,
+      error: result.error || "missing_status",
+      status: result.status
+    }, code);
   }
   return json(env, request, { ok: true, status: result.status });
 }
