@@ -14,12 +14,13 @@ binding = "BALLOT_KV"
 id = "REPLACE_WITH_KV_NAMESPACE_ID"
 
 # Cloudflare Workers Cron Triggers (UTC). NOT local crontab, NOT Grok Bot.
-# Primary: every minute so 10-minute vote windows are settled near closesAt.
-# 8h expression 0 0,8,16 * * * is deprecated as the main narrative.
-# If your local untracked wrangler.toml still has 0 0,8,16 * * *, replace with
-# every-minute cron matching this example before deploy.
+# Primary: every 10 minutes, matching 10-minute vote windows (settled near closesAt).
+# */1 burned free-tier KV writes on skipped_open ticks. 8h expression
+# 0 0,8,16 * * * is deprecated as the main narrative.
+# If your local untracked wrangler.toml still has 0 0,8,16 * * * or */1 * * * *,
+# replace with every-10-minute cron matching this example before deploy.
 [triggers]
-crons = ["*/1 * * * *"]
+crons = ["*/10 * * * *"]
 
 [vars]
 # Production Pages origin (Worker fetches rotate-config / ballot-window / arsenal).

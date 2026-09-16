@@ -5,7 +5,7 @@
  * Windows are floor-aligned in timezone by that duration. No git, X, agy, or demo builds.
  */
 
-export const CRON_UTC = "*/1 * * * *";
+export const CRON_UTC = "*/10 * * * *";
 export const CONFIG_TTL_S = 60 * 60 * 24 * 7;
 export const LEDGER_TTL_S = 60 * 60 * 24 * 14;
 export const STATUS_TTL_S = 60 * 60 * 24 * 14;
@@ -15,6 +15,14 @@ export const LOCK_TTL_S = 60;
 
 export function kvTtl(seconds) {
   return Math.max(KV_MIN_TTL_S, Number(seconds) || 0);
+}
+
+/** KV / runtime error name only. Never echo messages (may contain secrets). */
+export function safeErrorDetail(err) {
+  if (err == null) return "unknown";
+  const name = String(err.name || "Error");
+  const cleaned = name.replace(/[^A-Za-z0-9._-]/g, "").slice(0, 80);
+  return cleaned || "Error";
 }
 
 const DEFAULT_TZ = "Asia/Shanghai";
@@ -372,9 +380,56 @@ export function harnessFlagsFrom(prior) {
   };
 }
 
+export const PENDING_LEDGER_KEY = "pending-ledger";
+/** Consecutive vote-ledger put failures for the same settledWindowId before
+ *  giving up exclusive repair. After this, error=ledger_repair_exhausted and
+ *  the next closed current window may settle so the chain does not freeze. */
+export const LEDGER_REPAIR_MAX_FAILURES = 5;
+
+export function pendingLedgerFrom(priorStatus, stored) {
+  const fromStatus = (priorStatus && priorStatus.pendingLedger && priorStatus.pendingLedger.settledWindowId)
+    ? priorStatus.pendingLedger
+    : null;
+  const fromKey = (stored && stored.settledWindowId) ? stored : null;
+  if (!fromStatus && !fromKey) return null;
+  if (!fromStatus) return fromKey;
+  if (!fromKey) return fromStatus;
+  // KEY wins identity fields; failCount is max so a stale lower status count
+  // cannot delay ledger_repair_exhausted.
+  const merged = Object.assign({}, fromStatus, fromKey);
+  merged.failCount = Math.max(Number(fromStatus.failCount) || 0, Number(fromKey.failCount) || 0);
+  return merged;
+}
+
+export function compactPendingBallot(ballot) {
+  return {
+    windowId: String((ballot && ballot.windowId) || ""),
+    candidates: Array.isArray(ballot && ballot.candidates) ? ballot.candidates : []
+  };
+}
+
 export async function ackRotateFlags(kv, patch) {
   const prior = await kv.get("rotate-status", "json");
   if (!prior) return { ok: false, error: "missing_status" };
+  let storedPending = null;
+  try {
+    storedPending = await kv.get(PENDING_LEDGER_KEY, "json");
+  } catch (_) {
+    storedPending = null;
+  }
+  const pending = pendingLedgerFrom(prior, storedPending);
+  const wantsClear = !!(patch && (patch.needsGitPush === false || patch.needsXIngest === false));
+  if (pending && pending.settledWindowId && wantsClear) {
+    return {
+      ok: false,
+      error: "pending_ledger",
+      status: Object.assign({}, prior, {
+        needsGitPush: true,
+        needsXIngest: true,
+        pendingLedger: pending
+      })
+    };
+  }
   const next = Object.assign({}, prior);
   if (patch && patch.needsGitPush === false) next.needsGitPush = false;
   if (patch && patch.needsXIngest === false) next.needsXIngest = false;
@@ -403,7 +458,9 @@ export async function runRotate(env, opts) {
     return next;
   };
 
-  const fail = async function (error, extra) {
+  const fail = async function (error, extra, failOpts) {
+    const preserve = !(failOpts && failOpts.preserveHarnessFlags === false);
+    const dropPending = !!(failOpts && failOpts.dropPendingLedger);
     const status = Object.assign({
       version: 1,
       at: started,
@@ -416,11 +473,36 @@ export async function runRotate(env, opts) {
       needsXIngest: priorFlags.needsXIngest,
       noteZh: "Worker Cron 失败，未改窗。勿在 Worker 内补跑 git / X / agy。"
     }, extra || {});
+    if (dropPending) {
+      delete status.pendingLedger;
+    } else {
+      let storedPending = null;
+      try {
+        storedPending = await kv.get(PENDING_LEDGER_KEY, "json");
+      } catch (_) {
+        storedPending = null;
+      }
+      const merged = pendingLedgerFrom({
+        pendingLedger: (status.pendingLedger && status.pendingLedger.settledWindowId)
+          ? status.pendingLedger
+          : (priorStatus && priorStatus.pendingLedger)
+      }, storedPending);
+      if (merged) status.pendingLedger = merged;
+    }
+    if (status.pendingLedger && status.pendingLedger.settledWindowId) {
+      try {
+        await putJson(kv, PENDING_LEDGER_KEY, status.pendingLedger, STATUS_TTL_S);
+      } catch (_) {
+        /* status write still carries pendingLedger */
+      }
+    }
     try {
-      return await writeStatus(status, true);
+      return await writeStatus(status, preserve);
     } catch (_) {
-      status.needsGitPush = priorFlags.needsGitPush;
-      status.needsXIngest = priorFlags.needsXIngest;
+      if (preserve) {
+        status.needsGitPush = priorFlags.needsGitPush;
+        status.needsXIngest = priorFlags.needsXIngest;
+      }
       return status;
     }
   };
@@ -431,6 +513,13 @@ export async function runRotate(env, opts) {
       needsGitPush: true,
       needsXIngest: true
     });
+    delete payload.pendingLedger;
+    delete payload.error;
+    try {
+      await kv.delete(PENDING_LEDGER_KEY);
+    } catch (_) {
+      /* missing key is fine */
+    }
     try {
       await writeStatus(payload, false);
       return payload;
@@ -447,6 +536,7 @@ export async function runRotate(env, opts) {
           noteZh: payload.noteZh || ""
         });
         delete patched.error;
+        delete patched.pendingLedger;
         await writeStatus(patched, false);
       } catch (__) {
         /* return in-memory flags-true status; never write 未改窗 */
@@ -455,10 +545,11 @@ export async function runRotate(env, opts) {
     }
   };
 
+  let priorStatus = null;
   try {
-    const priorStatus = await kv.get("rotate-status", "json");
+    priorStatus = await kv.get("rotate-status", "json");
     priorFlags = harnessFlagsFrom(priorStatus);
-  } catch (_) {
+  } catch (err) {
     return {
       version: 1,
       at: started,
@@ -466,7 +557,8 @@ export async function runRotate(env, opts) {
       scheduledTime: isoZ(Number(options.scheduledTime) || nowMs),
       ok: false,
       action: "error",
-      error: "rotate_failed"
+      error: "rotate_failed",
+      detail: safeErrorDetail(err)
     };
   }
 
@@ -475,12 +567,178 @@ export async function runRotate(env, opts) {
   let durablyMutated = false;
   try {
     try {
-      if (!options.skipLock) {
+      const takeLock = async function () {
+        if (options.skipLock) return true;
         const locked = await claimLock(kv);
-        if (!locked) {
-          return await fail("locked");
-        }
+        if (!locked) return false;
         heldLock = true;
+        return true;
+      };
+
+      const loadCachedArsenal = async function () {
+        let arsenal = null;
+        try {
+          arsenal = await loadArsenal(env, fetchImpl);
+          if (arsenal) {
+            await putJson(kv, "arsenal", arsenal, CONFIG_TTL_S);
+          }
+        } catch (_) {
+          arsenal = await kv.get("arsenal", "json");
+        }
+        return arsenal;
+      };
+
+      const failLedger = async function (err, pending) {
+        let stored = null;
+        try {
+          stored = await kv.get(PENDING_LEDGER_KEY, "json");
+        } catch (_) {
+          stored = null;
+        }
+        const base = pendingLedgerFrom({ pendingLedger: pending }, stored) || pending;
+        const failCount = (Number(base.failCount) || 0) + 1;
+        const nextPending = Object.assign({}, base, { failCount: failCount });
+        if (failCount >= LEDGER_REPAIR_MAX_FAILURES) {
+          try {
+            await kv.delete(PENDING_LEDGER_KEY);
+          } catch (_) {
+            /* exclusive retry stops even if delete fails */
+          }
+          if (priorStatus) delete priorStatus.pendingLedger;
+          return await fail("ledger_repair_exhausted", {
+            detail: safeErrorDetail(err),
+            settledWindowId: nextPending.settledWindowId,
+            nextWindowId: nextPending.nextWindowId,
+            exhaustedPendingLedger: nextPending,
+            ledgerRepairFailures: failCount,
+            needsGitPush: true,
+            needsXIngest: true,
+            noteZh: "vote-ledger 连续写入失败已达上限（" + LEDGER_REPAIR_MAX_FAILURES + "），停止独占重试以免卡住转窗。"
+          }, { preserveHarnessFlags: false, dropPendingLedger: true });
+        }
+        try {
+          await putJson(kv, PENDING_LEDGER_KEY, nextPending, STATUS_TTL_S);
+        } catch (_) {
+          /* rotate-status still carries pendingLedger */
+        }
+        return await fail("ledger_failed", {
+          detail: safeErrorDetail(err),
+          settledWindowId: nextPending.settledWindowId,
+          nextWindowId: nextPending.nextWindowId,
+          pendingLedger: nextPending,
+          needsGitPush: true,
+          needsXIngest: true,
+          noteZh: "下一窗已写入 KV，但 vote-ledger 写入失败。未报 rotated。将在后续 Cron 补写 ledger。"
+        }, { preserveHarnessFlags: false });
+      };
+
+      const tryRepairPendingLedger = async function (pending) {
+        const arsenal = await loadCachedArsenal();
+        const ballot = (pending.ballot && pending.ballot.windowId)
+          ? pending.ballot
+          : ((await kv.get("window-meta:" + pending.settledWindowId, "json")) || {
+              windowId: pending.settledWindowId,
+              candidates: []
+            });
+        const tallies = (await kv.get("tally:" + pending.settledWindowId, "json")) || emptyTallies();
+        const settled = settleFromTallies(ballot, arsenal || { sections: [] }, {
+          ok: true,
+          voteCount: Number(tallies.voteCount) || 0,
+          tallies: tallies
+        }, nowMs);
+        try {
+          await putJson(kv, "vote-ledger", settled.ledger, LEDGER_TTL_S);
+        } catch (err) {
+          const status = await failLedger(err, pending);
+          return {
+            ok: false,
+            exhausted: status.error === "ledger_repair_exhausted",
+            status: status
+          };
+        }
+        try {
+          await kv.delete(PENDING_LEDGER_KEY);
+        } catch (_) {
+          /* missing key is fine */
+        }
+        if (priorStatus) delete priorStatus.pendingLedger;
+        return {
+          ok: true,
+          repaired: {
+            settledWindowId: settled.ledger.settledWindowId,
+            nextWindowId: pending.nextWindowId || null,
+            voteCount: settled.ledger.voteCount,
+            winningStack: settled.ledger.winningStack
+          }
+        };
+      };
+
+      let storedPending = null;
+      try {
+        storedPending = await kv.get(PENDING_LEDGER_KEY, "json");
+      } catch (_) {
+        storedPending = null;
+      }
+      const pending = pendingLedgerFrom(priorStatus, storedPending);
+      let repairResult = null;
+      if (pending && pending.settledWindowId) {
+        if (!await takeLock()) return await fail("locked");
+        repairResult = await tryRepairPendingLedger(pending);
+        if (!repairResult.ok && !repairResult.exhausted) {
+          return repairResult.status;
+        }
+      }
+
+      let current = await kv.get("current-window", "json");
+      if (current && current.windowId) {
+        const closesMs = parseIso(current.closesAt);
+        const opensMs = parseIso(current.opensAt);
+        if (!Number.isFinite(closesMs) || !Number.isFinite(opensMs)) {
+          return await fail("invalid_window", { settledWindowId: current.windowId });
+        }
+        if (nowMs < closesMs && !force) {
+          if (repairResult && repairResult.ok) {
+            committed = {
+              version: 1,
+              at: started,
+              cron: cron,
+              scheduledTime: isoZ(Number(options.scheduledTime) || nowMs),
+              ok: true,
+              action: "rotated",
+              settledWindowId: repairResult.repaired.settledWindowId,
+              nextWindowId: repairResult.repaired.nextWindowId,
+              voteCount: repairResult.repaired.voteCount,
+              winningStack: repairResult.repaired.winningStack,
+              needsGitPush: true,
+              needsXIngest: true,
+              noteZh: "已补写 vote-ledger（上一窗结算）。窗此前已写入 KV。harness 见 needsGitPush / needsXIngest。"
+            };
+            durablyMutated = true;
+            return await writeCommittedStatus(committed);
+          }
+          if (repairResult && repairResult.exhausted) {
+            return repairResult.status;
+          }
+          // Skip before claimLock: open-window ticks must not put/delete rotate-lock.
+          return {
+            version: 1,
+            at: started,
+            cron: cron,
+            scheduledTime: isoZ(Number(options.scheduledTime) || nowMs),
+            ok: true,
+            action: "skipped_open",
+            settledWindowId: null,
+            nextWindowId: current.windowId,
+            voteCount: 0,
+            needsGitPush: priorFlags.needsGitPush,
+            needsXIngest: priorFlags.needsXIngest,
+            noteZh: "当前窗仍未关闭，Worker Cron 跳过。needsGitPush / needsXIngest 沿用上次成功转窗，直至 harness POST /api/rotate-status/ack。"
+          };
+        }
+      }
+
+      if (!heldLock) {
+        if (!await takeLock()) return await fail("locked");
       }
 
       let cfg;
@@ -490,20 +748,12 @@ export async function runRotate(env, opts) {
         return await fail("config_fetch_failed");
       }
 
-      let current = await kv.get("current-window", "json");
+      current = (await kv.get("current-window", "json")) || current;
       if (!current || !current.windowId) {
         current = await loadBallotFallback(env, fetchImpl);
       }
 
-      let arsenal = null;
-      try {
-        arsenal = await loadArsenal(env, fetchImpl);
-        if (arsenal) {
-          await putJson(kv, "arsenal", arsenal, CONFIG_TTL_S);
-        }
-      } catch (_) {
-        arsenal = await kv.get("arsenal", "json");
-      }
+      const arsenal = await loadCachedArsenal();
 
       const optionsFromArsenal = activeOptions(arsenal);
       const stackOptions = (optionsFromArsenal.fuel.length || optionsFromArsenal.harness.length)
@@ -512,6 +762,14 @@ export async function runRotate(env, opts) {
 
       if (!current || !current.windowId) {
         const boot = bootstrapBallot(nowMs, cfg, stackOptions);
+        try {
+          await persistWindow(kv, boot);
+        } catch (err) {
+          return await fail("persist_failed", {
+            detail: safeErrorDetail(err),
+            nextWindowId: boot.windowId
+          });
+        }
         committed = {
           version: 1,
           at: started,
@@ -527,31 +785,11 @@ export async function runRotate(env, opts) {
           noteZh: "KV 无窗快照，已按 rotate-config 打开当前上海窗。请 harness 把 ballot-window 同步进 git；Worker 未抓 X。"
         };
         durablyMutated = true;
-        await persistWindow(kv, boot);
       } else {
         const closesMs = parseIso(current.closesAt);
         const opensMs = parseIso(current.opensAt);
         if (!Number.isFinite(closesMs) || !Number.isFinite(opensMs)) {
           return await fail("invalid_window", { settledWindowId: current.windowId });
-        }
-
-        if (nowMs < closesMs && !force) {
-          const status = {
-            version: 1,
-            at: started,
-            cron: cron,
-            scheduledTime: isoZ(Number(options.scheduledTime) || nowMs),
-            ok: true,
-            action: "skipped_open",
-            settledWindowId: null,
-            nextWindowId: current.windowId,
-            voteCount: 0,
-            needsGitPush: priorFlags.needsGitPush,
-            needsXIngest: priorFlags.needsXIngest,
-            noteZh: "当前窗仍未关闭，Worker Cron 跳过。needsGitPush / needsXIngest 沿用上次成功转窗，直至 harness POST /api/rotate-status/ack。"
-          };
-          await writeStatus(status, true);
-          return status;
         }
 
         const tallies = (await kv.get("tally:" + current.windowId, "json")) || emptyTallies();
@@ -562,6 +800,45 @@ export async function runRotate(env, opts) {
         }, nowMs);
 
         const next = nextBallotSnapshot(nowMs, closesMs, current, cfg, stackOptions);
+        // persistWindow FIRST. Never report rotated if the next window did not land.
+        try {
+          await persistWindow(kv, next);
+        } catch (err) {
+          return await fail("persist_failed", {
+            detail: safeErrorDetail(err),
+            settledWindowId: current.windowId,
+            nextWindowId: next.windowId
+          });
+        }
+        const pendingMarker = {
+          settledWindowId: settled.ledger.settledWindowId,
+          nextWindowId: next.windowId,
+          ballot: compactPendingBallot(current),
+          failCount: 0
+        };
+        // Crash-safe: pending must land before vote-ledger so a thrown put
+        // cannot orphan the settlement (re-repair is idempotent).
+        try {
+          await putJson(kv, PENDING_LEDGER_KEY, pendingMarker, STATUS_TTL_S);
+        } catch (_) {
+          /* failLedger still retries the marker */
+        }
+        try {
+          const optimistic = Object.assign({}, priorStatus || {}, {
+            pendingLedger: pendingMarker,
+            needsGitPush: true,
+            needsXIngest: true
+          });
+          await putJson(kv, "rotate-status", optimistic, STATUS_TTL_S);
+          priorStatus = optimistic;
+        } catch (_) {
+          /* KEY is the backup if status put fails */
+        }
+        try {
+          await putJson(kv, "vote-ledger", settled.ledger, LEDGER_TTL_S);
+        } catch (err) {
+          return await failLedger(err, pendingMarker);
+        }
         committed = {
           version: 1,
           at: started,
@@ -578,11 +855,13 @@ export async function runRotate(env, opts) {
           noteZh:
             "Worker Cron 已在 KV 结算上一窗并打开下一窗。未跑 git / X / agy。harness 见 needsGitPush / needsXIngest；完成后 POST /api/rotate-status/ack。"
         };
+        if (repairResult && repairResult.exhausted && repairResult.status) {
+          committed.exhaustedPendingLedger = repairResult.status.exhaustedPendingLedger;
+          committed.ledgerRepairFailures = repairResult.status.ledgerRepairFailures;
+        }
         durablyMutated = true;
-        await putJson(kv, "vote-ledger", settled.ledger, LEDGER_TTL_S);
-        await persistWindow(kv, next);
       }
-    } catch (_) {
+    } catch (err) {
       if (durablyMutated) {
         const status = committed || {
           version: 1,
@@ -596,7 +875,7 @@ export async function runRotate(env, opts) {
         };
         return await writeCommittedStatus(status);
       }
-      return await fail("rotate_failed");
+      return await fail("rotate_failed", { detail: safeErrorDetail(err) });
     }
 
     if (committed) {
