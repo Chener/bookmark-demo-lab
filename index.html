@@ -4,7 +4,7 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>书签演示实验室 · Hub v2</title>
-  <meta name="description" content="从 X 书签出发的自动化静态技术演示枢纽。10分钟轮转、技术栈竞投、一键直达演示与原帖。" />
+  <meta name="description" content="从 X 书签出发的自动化静态技术演示枢纽。短窗轮转、技术栈竞投、一键直达演示与原帖。" />
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600;700&family=Noto+Sans+SC:wght@400;500;700;900&display=swap" rel="stylesheet" />
@@ -328,7 +328,7 @@
     }
 
     /* ===================================================
-       投票窗区：10分钟倒计时 · 无候选隐藏 · 级联过滤
+       投票窗区：本窗倒计时 · 无候选隐藏 · 级联过滤
        =================================================== */
     .vote-panel {
       margin-bottom: 2.8rem;
@@ -379,7 +379,7 @@
       color: var(--ink-muted);
     }
 
-    /* 10分钟倒计时 HUD 仪表 */
+    /* 本窗倒计时 HUD 仪表 */
     .timer-hud {
       display: flex;
       flex-direction: column;
@@ -1151,7 +1151,7 @@
         </div>
         <div>
           <h1 class="brand-title">书签演示实验室 <span class="brand-tag">HUB v2</span></h1>
-          <p class="brand-sub">从 X 书签到一页可点静态演示 · 10分钟自动轮转交付</p>
+          <p class="brand-sub">从 X 书签到一页可点静态演示 · 短窗自动轮转交付</p>
         </div>
       </div>
       <div class="hud-telemetry">
@@ -1178,7 +1178,7 @@
         <div class="pipe-node pipe-pre" id="pipe-stage-pre">
           <div class="pipe-badge"><span class="pip-dot"></span>开发前 · 投票 / 排队</div>
           <p class="pipe-name" id="pipe-pre-title">1 候选待投票</p>
-          <p class="pipe-desc" id="pipe-pre-desc">10分钟轮转窗口开启中，决定下一拍栈</p>
+          <p class="pipe-desc" id="pipe-pre-desc">短窗轮转开启中，决定下一拍栈</p>
         </div>
 
         <div class="pipe-arrow" aria-hidden="true">
@@ -1216,7 +1216,7 @@
       </div>
     </section>
 
-    <!-- 投票区：必须满足「10分钟倒计时」、「无候选隐藏投票」、「候选 rationaleZh」、「Cursor系则模型仅Grok/Composer可选其余disabled」 -->
+    <!-- 投票区：必须满足「本窗倒计时」、「无候选隐藏投票」、「候选 rationaleZh」、「Cursor系则模型仅Grok/Composer可选其余disabled」 -->
     <section class="vote-panel" id="vote-panel" hidden aria-label="本窗方案投票">
       <div class="vote-hero-row">
         <div class="vote-hero-left">
@@ -1228,12 +1228,12 @@
             基于最新 X 书签构建增量候选。技术栈由你决定，无需登录，单 IP 单窗限投一次。
           </p>
         </div>
-        <!-- 10分钟倒计时 HUD 仪表 -->
+        <!-- 本窗倒计时 HUD 仪表（标签由 closesAt−opensAt 推导） -->
         <div class="timer-hud">
           <div class="timer-hud-label">
-            <span class="t-dot"></span>10分钟轮转倒计时
+            <span class="t-dot"></span><span id="timer-hud-label-text">本窗倒计时</span>
           </div>
-          <div class="timer-digits" id="timer-digits">09:59</div>
+          <div class="timer-digits" id="timer-digits">--:--</div>
           <div class="timer-progress-track">
             <div class="timer-progress-bar" id="timer-progress-bar"></div>
           </div>
@@ -1471,7 +1471,7 @@
     })();
   </script>
 
-  <!-- Hub v2 核心逻辑 (10分钟倒计时 / 级联 / 隐藏无候选 / rationaleZh) -->
+  <!-- Hub v2 核心逻辑 (本窗倒计时 / 级联 / 隐藏无候选 / rationaleZh) -->
   <script>
     (function () {
       const FP_STORAGE_KEY = "bdl_fingerprint";
@@ -1486,6 +1486,8 @@
         { id: "deepseek-r1", name: "deepseek-r1", note: "OpenRouter开源前沿", isCursor: false }
       ];
 
+      const WINDOW_POLL_MS = 20000;
+
       const state = {
         config: null,
         window: null,
@@ -1493,7 +1495,13 @@
         ledger: null,
         bookmarks: [],
         submitting: false,
-        countdownTimer: null
+        countdownTimer: null,
+        watchMode: null,
+        countdownClosesMs: null,
+        windowRefreshing: false,
+        lastWindowPollAt: 0,
+        cascadeBound: false,
+        searchBound: false
       };
 
       // 工具函数
@@ -1538,6 +1546,66 @@
         const m = Math.floor(s / 60);
         const sec = s % 60;
         return String(m).padStart(2, "0") + ":" + String(sec).padStart(2, "0");
+      }
+
+      function formatWindowCountdownLabel(opensMs, closesMs) {
+        const durationMs = closesMs - opensMs;
+        if (!Number.isFinite(durationMs) || durationMs <= 0) return "本窗倒计时";
+        const minutes = Math.round(durationMs / 60000);
+        if (minutes <= 15) return "本窗倒计时（约" + Math.max(1, minutes) + "分钟）";
+        return "本窗倒计时";
+      }
+
+      function windowFingerprint(win) {
+        if (!win) return "";
+        const ids = (Array.isArray(win.candidates) ? win.candidates : [])
+          .map(function (c) { return (c && c.id) + ":" + (c && c.status); })
+          .join(",");
+        return [win.windowId || "", win.opensAt || "", win.closesAt || "", ids].join("|");
+      }
+
+      function stopWindowWatch() {
+        if (state.countdownTimer) {
+          clearInterval(state.countdownTimer);
+          state.countdownTimer = null;
+        }
+        state.watchMode = null;
+        state.countdownClosesMs = null;
+      }
+
+      function clearSubmitState() {
+        state.submitting = false;
+        const btn = document.getElementById("vote-submit-btn");
+        const msg = document.getElementById("vote-msg");
+        if (btn) btn.disabled = true;
+        if (msg) {
+          msg.textContent = "";
+          msg.removeAttribute("data-kind");
+        }
+      }
+
+      function voteApiBase() {
+        return String(state.config && state.config.voteApiBase || "").trim().replace(/\/$/, "");
+      }
+
+      async function refreshLiveWindow() {
+        if (state.windowRefreshing) return;
+        state.windowRefreshing = true;
+        state.lastWindowPollAt = Date.now();
+        try {
+          const winData = await loadWindow(voteApiBase());
+          const prev = windowFingerprint(state.window);
+          const next = windowFingerprint(winData);
+          state.window = winData;
+          if (prev !== next) {
+            renderPipelineStrip();
+            renderVotePanel();
+          }
+        } catch (err) {
+          console.warn("轻量轮询 /api/window 失败:", err);
+        } finally {
+          state.windowRefreshing = false;
+        }
       }
 
       // 1. 加载配置与初始数据
@@ -1653,7 +1721,7 @@
             preDesc.textContent = "暂无开放 X 书签待投，投票入口自动静默";
           } else {
             preTitle.textContent = openCands.length + " 个候选排队中";
-            preDesc.textContent = "10分钟轮转竞投进行中，胜出者直进构建";
+            preDesc.textContent = "短窗轮转竞投进行中，胜出者直进构建";
           }
         }
 
@@ -1679,26 +1747,42 @@
       }
 
       // ===================================================
-      // 投票面板渲染：10分钟倒计时 + 无候选隐藏 + 级联限制
+      // 投票面板渲染：本窗倒计时 + 无候选隐藏 + 级联限制
       // ===================================================
       function renderVotePanel() {
         const panel = document.getElementById("vote-panel");
+        if (!panel) return;
+
         const win = state.window;
-        if (!panel || !win) return;
+        if (!win) {
+          panel.hidden = true;
+          clearSubmitState();
+          startIdleWindowPoll();
+          return;
+        }
 
         const now = Date.now();
         const opens = Date.parse(win.opensAt);
         const closes = Date.parse(win.closesAt);
-        const isOpen = Number.isFinite(opens) && Number.isFinite(closes) && now >= opens && now < closes;
-        
+        const remainingSec = Number.isFinite(closes) ? Math.max(0, Math.floor((closes - now) / 1000)) : 0;
+        const isOpen = Number.isFinite(opens) && Number.isFinite(closes) && now >= opens && now < closes && remainingSec > 0;
+
         const openCands = Array.isArray(win.candidates)
           ? win.candidates.filter(c => c && c.status === "open")
           : [];
 
-        // 核心规则：无候选 或 窗口关闭，隐藏整个投票区
+        const labelEl = document.getElementById("timer-hud-label-text");
+        if (labelEl) labelEl.textContent = formatWindowCountdownLabel(opens, closes);
+
+        // 核心规则：无候选或窗口关闭时隐藏投票区，但开窗空候选仍轻量轮询 live /api/window
         if (!isOpen || openCands.length === 0) {
           panel.hidden = true;
-          if (state.countdownTimer) clearInterval(state.countdownTimer);
+          clearSubmitState();
+          if (isOpen) {
+            startCountdown(closes, opens, true);
+          } else {
+            startIdleWindowPoll();
+          }
           return;
         }
 
@@ -1709,8 +1793,7 @@
           document.getElementById("vote-ingest-note").textContent = win.ingestNoteZh;
         }
 
-        // 启动 10 分钟倒计时
-        startCountdown(closes, opens);
+        startCountdown(closes, opens, false);
 
         // 渲染候选人列表 (含 rationaleZh)
         renderCandidates(openCands);
@@ -1725,9 +1808,23 @@
         loadLiveTallies(win.windowId);
       }
 
-      // 10分钟倒计时核心计时器
-      function startCountdown(closesMs, opensMs) {
-        if (state.countdownTimer) clearInterval(state.countdownTimer);
+      function startIdleWindowPoll() {
+        if (state.watchMode === "idle" && state.countdownTimer) return;
+        stopWindowWatch();
+        state.watchMode = "idle";
+        state.countdownTimer = setInterval(refreshLiveWindow, WINDOW_POLL_MS);
+      }
+
+      // 本窗倒计时；pollLive 时复用 tick 轻量拉取 /api/window（开窗无候选）
+      function startCountdown(closesMs, opensMs, pollLive) {
+        const mode = pollLive ? "countdown-poll" : "countdown";
+        if (state.watchMode === mode && state.countdownTimer && state.countdownClosesMs === closesMs) {
+          return;
+        }
+        stopWindowWatch();
+        state.watchMode = mode;
+        state.countdownClosesMs = closesMs;
+        state.lastWindowPollAt = Date.now();
 
         const digitsEl = document.getElementById("timer-digits");
         const barEl = document.getElementById("timer-progress-bar");
@@ -1736,17 +1833,22 @@
         function tick() {
           const remainingSec = Math.max(0, Math.floor((closesMs - Date.now()) / 1000));
           if (digitsEl) digitsEl.textContent = formatCountdownDigits(remainingSec);
-          
+
           if (barEl) {
             const pct = Math.min(100, Math.max(0, (remainingSec / totalDuration) * 100));
             barEl.style.width = pct + "%";
           }
 
+          if (pollLive && Date.now() - state.lastWindowPollAt >= WINDOW_POLL_MS) {
+            refreshLiveWindow();
+          }
+
           if (remainingSec <= 0) {
-            clearInterval(state.countdownTimer);
+            stopWindowWatch();
             if (digitsEl) digitsEl.textContent = "00:00";
-            // 窗已关闭，触发重载
-            loadAllData();
+            Promise.resolve(loadAllData()).finally(function () {
+              if (!state.countdownTimer) startIdleWindowPoll();
+            });
           }
         }
 
@@ -1787,11 +1889,17 @@
           titleRow.append(h3, auth);
           body.append(titleRow);
 
-          // 核心展示：rationaleZh
+          // 核心展示：rationaleZh（textContent，禁止拼进 innerHTML）
           const rationale = cand.rationaleZh || cand.planZh || "原帖核心交互直觉复刻，验证无人值守静态交付全链路。";
           const ratBox = document.createElement("div");
           ratBox.className = "rationale-strip";
-          ratBox.innerHTML = '<span class="rationale-tag">立项理由 / rationaleZh</span><p class="rationale-text">' + rationale + '</p>';
+          const ratTag = document.createElement("span");
+          ratTag.className = "rationale-tag";
+          ratTag.textContent = "立项理由 / rationaleZh";
+          const ratText = document.createElement("p");
+          ratText.className = "rationale-text";
+          ratText.textContent = rationale;
+          ratBox.append(ratTag, ratText);
           body.append(ratBox);
 
           if (cand.planZh && cand.planZh !== rationale) {
@@ -1904,63 +2012,73 @@
       // 船长纠正 2：Cursor系级联限制
       // if fuel/harness is Cursor-family → only Grok/Composer model options enabled; others disabled/grey
       // ===================================================
+      function applyCascading() {
+        const form = document.getElementById("vote-form");
+        if (!form) return;
+
+        const fd = new FormData(form);
+        const selFuel = String(fd.get("fuel") || "");
+        const selHarness = String(fd.get("harness") || "");
+        const isCursorFamily = selFuel.toLowerCase().includes("cursor") || selHarness.toLowerCase().includes("cursor");
+
+        const badge = document.getElementById("model-cascade-badge");
+        if (badge) {
+          badge.textContent = isCursorFamily ? "Cursor系仅限Grok/Composer" : "全模型开放";
+          badge.style.color = isCursorFamily ? "var(--amber)" : "var(--cyan)";
+        }
+
+        const modelLabels = document.querySelectorAll("#model-choices .choice-label");
+        modelLabels.forEach(label => {
+          const radio = label.querySelector('input[type="radio"]');
+          const modelId = label.dataset.modelId;
+          const item = MODEL_CATALOG.find(m => m.id === modelId);
+          const isCursorAllowed = item && item.isCursor;
+
+          if (isCursorFamily) {
+            // Cursor 系：仅 Grok 和 Composer 可选，其余 disabled 并灰显
+            if (isCursorAllowed) {
+              radio.disabled = false;
+              label.classList.remove("is-disabled");
+              label.querySelector(".choice-note").textContent = item.id === "grok-4.6" ? "Cursor主力模型" : "Cursor原生架构";
+            } else {
+              radio.disabled = true;
+              label.classList.add("is-disabled");
+              label.querySelector(".choice-note").textContent = "Cursor系暂不可用";
+              if (radio.checked) {
+                // 自动纠正到 grok-4.6
+                const defRadio = document.querySelector('input[name="model"][value="grok-4.6"]');
+                if (defRadio) defRadio.checked = true;
+              }
+            }
+          } else {
+            // 非 Cursor 系，解除此特定限制
+            radio.disabled = false;
+            label.classList.remove("is-disabled");
+            label.querySelector(".choice-note").textContent = item ? item.note : "";
+          }
+        });
+
+        // 同步流水线「开发中」展示卡
+        const curModel = String(form.elements["model"] ? form.elements["model"].value : "grok-4.6");
+        const curEnv = String(fd.get("environment") || "Cloud Agent 托管机");
+        const fuelPill = document.getElementById("pipe-pill-fuel");
+        const modelPill = document.getElementById("pipe-pill-model");
+        const harnessPill = document.getElementById("pipe-pill-harness");
+        const envPill = document.getElementById("pipe-pill-env");
+        if (fuelPill) fuelPill.innerHTML = "<b>燃料</b>" + selFuel;
+        if (modelPill) modelPill.innerHTML = "<b>模型</b>" + curModel;
+        if (harnessPill) harnessPill.innerHTML = "<b>载体</b>" + selHarness;
+        if (envPill) envPill.innerHTML = "<b>环境</b>" + curEnv;
+      }
+
       function bindCascadingConstraints() {
         const form = document.getElementById("vote-form");
         if (!form) return;
 
-        function applyCascading() {
-          const fd = new FormData(form);
-          const selFuel = String(fd.get("fuel") || "");
-          const selHarness = String(fd.get("harness") || "");
-          const isCursorFamily = selFuel.toLowerCase().includes("cursor") || selHarness.toLowerCase().includes("cursor");
-
-          const badge = document.getElementById("model-cascade-badge");
-          if (badge) {
-            badge.textContent = isCursorFamily ? "Cursor系仅限Grok/Composer" : "全模型开放";
-            badge.style.color = isCursorFamily ? "var(--amber)" : "var(--cyan)";
-          }
-
-          const modelLabels = document.querySelectorAll("#model-choices .choice-label");
-          modelLabels.forEach(label => {
-            const radio = label.querySelector('input[type="radio"]');
-            const modelId = label.dataset.modelId;
-            const item = MODEL_CATALOG.find(m => m.id === modelId);
-            const isCursorAllowed = item && item.isCursor;
-
-            if (isCursorFamily) {
-              // Cursor 系：仅 Grok 和 Composer 可选，其余 disabled 并灰显
-              if (isCursorAllowed) {
-                radio.disabled = false;
-                label.classList.remove("is-disabled");
-                label.querySelector(".choice-note").textContent = item.id === "grok-4.6" ? "Cursor主力模型" : "Cursor原生架构";
-              } else {
-                radio.disabled = true;
-                label.classList.add("is-disabled");
-                label.querySelector(".choice-note").textContent = "Cursor系暂不可用";
-                if (radio.checked) {
-                  // 自动纠正到 grok-4.6
-                  const defRadio = document.querySelector('input[name="model"][value="grok-4.6"]');
-                  if (defRadio) defRadio.checked = true;
-                }
-              }
-            } else {
-              // 非 Cursor 系，解除此特定限制
-              radio.disabled = false;
-              label.classList.remove("is-disabled");
-              label.querySelector(".choice-note").textContent = item ? item.note : "";
-            }
-          });
-
-          // 同步流水线「开发中」展示卡
-          const curModel = String(form.elements["model"] ? form.elements["model"].value : "grok-4.6");
-          const curEnv = String(fd.get("environment") || "Cloud Agent 托管机");
-          document.getElementById("pipe-pill-fuel").innerHTML = "<b>燃料</b>" + selFuel;
-          document.getElementById("pipe-pill-model").innerHTML = "<b>模型</b>" + curModel;
-          document.getElementById("pipe-pill-harness").innerHTML = "<b>载体</b>" + selHarness;
-          document.getElementById("pipe-pill-env").innerHTML = "<b>环境</b>" + curEnv;
+        if (!state.cascadeBound) {
+          state.cascadeBound = true;
+          form.addEventListener("change", applyCascading);
         }
-
-        form.addEventListener("change", applyCascading);
         applyCascading();
       }
 
@@ -1994,6 +2112,8 @@
         voteForm.addEventListener("submit", async function (e) {
           e.preventDefault();
           if (state.submitting) return;
+          const panel = document.getElementById("vote-panel");
+          if (!state.window || (panel && panel.hidden)) return;
 
           const btn = document.getElementById("vote-submit-btn");
           const msg = document.getElementById("vote-msg");
@@ -2202,11 +2322,17 @@
             h4.textContent = item.hubTitle || item.titleZh || item.title || item.slug;
             mid.append(h4);
 
-            // 重点：卡片立项理由 rationaleZh 视觉
+            // 重点：卡片立项理由 rationaleZh 视觉（textContent，禁止拼进 innerHTML）
             const rationale = item.rationaleZh || item.blurbZh || "核心交互高保真还原与敏捷可测静态交付。";
             const ratBox = document.createElement("div");
             ratBox.className = "card-rationale-box";
-            ratBox.innerHTML = '<span class="card-rationale-tag">立项理由 / rationaleZh</span><p class="card-rationale-text">' + rationale + '</p>';
+            const ratTag = document.createElement("span");
+            ratTag.className = "card-rationale-tag";
+            ratTag.textContent = "立项理由 / rationaleZh";
+            const ratText = document.createElement("p");
+            ratText.className = "card-rationale-text";
+            ratText.textContent = rationale;
+            ratBox.append(ratTag, ratText);
             mid.append(ratBox);
 
             // 技术栈胶囊
@@ -2257,7 +2383,13 @@
           });
         }
 
-        if (searchInput) searchInput.addEventListener("input", filterAndRender);
+        state.demoFilterAndRender = filterAndRender;
+        if (searchInput && !state.searchBound) {
+          state.searchBound = true;
+          searchInput.addEventListener("input", function () {
+            if (typeof state.demoFilterAndRender === "function") state.demoFilterAndRender();
+          });
+        }
         filterAndRender();
       }
 
