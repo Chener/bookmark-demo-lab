@@ -5,7 +5,20 @@
   "periodHours": 8,
   "opensAt": "2026-09-16T00:00:00.000Z",
   "closesAt": "2026-09-16T08:00:00.000Z",
-  "candidates": [],
+  "candidates": [
+    {
+      "id": "2100039609958727756",
+      "url": "https://x.com/i/status/2100039609958727756",
+      "titleZh": "Jev plays doom in realtime and it looks like an …",
+      "author": "ziwenxu_",
+      "planZh": "把 @ziwenxu_ 这条关于「Jev plays doom in realtime and it looks like an actual playe」的演示做成可点 sticky demo：保留原帖核心交互/视觉，中文说明 + 一页可玩。技术栈待枢纽投票（燃料/harness/7×24）。",
+      "suggestedSlug": "jev-plays-doom-in-realtime-and",
+      "status": "open",
+      "source": "firstmate-x-mcp-slim",
+      "periodField": "created_at",
+      "periodAt": "2026-09-16T01:50:34.000Z"
+    }
+  ],
   "options": {
     "fuel": [
       "Cursor Ultra",
@@ -24,5 +37,5 @@
       "自购 VPS / 便宜 KVM"
     ]
   },
-  "ingestNoteZh": "本窗无新书签增量：Worker Cron 不抓 X。X ingest 由 harness（rotate-beat + X_BEARER_TOKEN / X_BOOKMARKS_USER_ID）处理；未实现或无凭证时 candidates=[]，绝不伪造。仍可投燃料 / harness / 7×24。"
+  "ingestNoteZh": "本窗候选 1 条：来自 Firstmate X MCP slim（page1），按 2026-09-16T00:00Z≤t<2026-09-16T08:00Z 过滤（优先 bookmarked_at，本页仅有 created_at）。已跳过 seen / 窗外。绝不伪造书签。 仍可投燃料 / harness / 7×24。"
 }

@@ -1,0 +1,413 @@
+{
+  "source": "user-X MCP get_users_bookmarks",
+  "account": "PixelMaLiang",
+  "user_id": "2091813297280655362",
+  "fetched_at": "2026-09-16T13:45+08:00",
+  "page": 1,
+  "count": 25,
+  "has_more": true,
+  "next_token": "7140dibdnow9c7btw4b2tnmhl0murr1jn9cxbdbca8tv8",
+  "approx_cost_usd": 0.275,
+  "items": [
+    {
+      "id": "2100039609958727756",
+      "url": "https://x.com/i/status/2100039609958727756",
+      "created_at": "2026-09-16T01:50:34.000Z",
+      "author": "ziwenxu_",
+      "author_name": "Ziwen",
+      "text": "Jev plays doom in realtime and it looks like an actual player.\n\ntheir numbers: 20 to 200x faster, 40 to 400x cheaper, output tokens free.\n\nTwo things we might see now:\n\n- the opponent we're up against in a game might be a realtime AI.\n- a TA, or anything else we'd hire a real per",
+      "metrics": {
+        "bookmark_count": 47,
+        "impression_count": 12488,
+        "like_count": 114,
+        "quote_count": 2,
+        "reply_count": 5,
+        "repost_count": 8
+      }
+    },
+    {
+      "id": "2099920497383440599",
+      "url": "https://x.com/i/status/2099920497383440599",
+      "created_at": "2026-09-15T17:57:15.000Z",
+      "author": "GeekCatX",
+      "author_name": "知识猫AI实验室",
+      "text": "去年反代CC 攒了 20 多个 Google Pro 账号，最近挑了几个接进 Codex。之前做视频用的那些 Skill，换 Gemini 跑也挺顺，只能说非常香。\n\n顺手把 Google 这套工具整理了一遍，写了 7 种用法。Flow 配合插件批量做图，NotebookLM 拿现成资料做 PPT，这些都很适合预算有限的内容创作者。\n\n我自己最推荐先练视频反推。手里有 Pro 的，可以拿一条喜欢的视频，跟着文章拆一次分镜，试着做一条自己的短片。",
+      "metrics": {
+        "bookmark_count": 74,
+        "impression_count": 9180,
+        "like_count": 46,
+        "quote_count": 0,
+        "reply_count": 6,
+        "repost_count": 6
+      }
+    },
+    {
+      "id": "2099836448044175427",
+      "url": "https://x.com/i/status/2099836448044175427",
+      "created_at": "2026-09-15T12:23:16.000Z",
+      "author": "superalesha",
+      "author_name": "Alexey Fateev",
+      "text": "I gave DeepSeek an Astra subagent. Then I gave Astra a DeepSeek subagent.\n\nThen I made both work alone, because apparently I needed 4 versions of Mario Kart.\n\nSame game prompt, each build from scratch. Astra on medium reasoning, DeepSeek on max throughout. I just wanted to see ho",
+      "metrics": {
+        "bookmark_count": 449,
+        "impression_count": 88705,
+        "like_count": 826,
+        "quote_count": 7,
+        "reply_count": 95,
+        "repost_count": 30
+      }
+    },
+    {
+      "id": "2099873865988247870",
+      "url": "https://x.com/i/status/2099873865988247870",
+      "created_at": "2026-09-15T14:51:58.000Z",
+      "author": "Khazix0918",
+      "author_name": "数字生命卡兹克",
+      "text": "网页聊天版的GPT-6 Pro在规划层面还是太强了，而且不消耗Codex额度，于是为了榨干200刀的ChatGPT额度，还有这个神级模型GPT-6 Pro，我想了一个办法。\n\n我直接把我服务器的所有的日志、事件记录，还有所有的数据表等等的只读权限，封装成了一个用我自己飞书进行登录验证的MCP，然后再封装成了插件，上传到了ChatGPT上。\n\n于是我就可以实现，在网页版聊天里面的GPT-6 Pro，通过这个服务器的MCP只读插件，来读取我服务器上面的所有的历史数据，通过Github的插件，还可以读取我GitHub上所有的PR记录和代码。\n\n于是，我们就可以",
+      "metrics": {
+        "bookmark_count": 2170,
+        "impression_count": 188823,
+        "like_count": 1827,
+        "quote_count": 18,
+        "reply_count": 234,
+        "repost_count": 178
+      }
+    },
+    {
+      "id": "2099756605491253477",
+      "url": "https://x.com/i/status/2099756605491253477",
+      "created_at": "2026-09-15T07:06:00.000Z",
+      "author": "Ryrenz",
+      "author_name": "Ren",
+      "text": "🐹 JetBrains 官方出手，专治 AI 写出一手过时 Go 代码：go-modern-guidelines 装进 Claude Code、Codex、Cursor 就能用。\n\nGitHub 上 3400 多 star，JetBrains 官方仓库，最近还上了 GitHub Trending。\n\n让 AI 写 Go，经常拿回来一堆老写法：手写 if-else 比大小，for 循环查切片里有没有某个值，一层层判 nil。代码能跑，但放在今天的 Go 里就是过时的。原因也不复杂，模型训练数据有滞后，旧写法在数据里出现得又更多。\n\ngo-modern-gu",
+      "metrics": {
+        "bookmark_count": 212,
+        "impression_count": 16494,
+        "like_count": 160,
+        "quote_count": 0,
+        "reply_count": 3,
+        "repost_count": 26
+      }
+    },
+    {
+      "id": "2099707280845332534",
+      "url": "https://x.com/i/status/2099707280845332534",
+      "created_at": "2026-09-15T03:50:01.000Z",
+      "author": "xiaoerzhan",
+      "author_name": "小耳👂Jane｜Xiaoer",
+      "text": "产品出海怎么设置收款，最简单的办法 https://t.co/F8lWTeb7SP",
+      "metrics": {
+        "bookmark_count": 504,
+        "impression_count": 19765,
+        "like_count": 225,
+        "quote_count": 4,
+        "reply_count": 24,
+        "repost_count": 40
+      }
+    },
+    {
+      "id": "2099808769043841452",
+      "url": "https://x.com/i/status/2099808769043841452",
+      "created_at": "2026-09-15T10:33:17.000Z",
+      "author": "gkxspace",
+      "author_name": "余温",
+      "text": "爽了，AI 做视频终于迎来了自己的 Harness 时代，彻底告别手搓剪映和抽卡黑盒！！！\n\n刚挖到一个极其硬核的开源项目：Hypit\n\n它是专门给 Claude Code、Codex 这类 Coding Agent 打造的开源视频语言与编译系统，简单说就是视频领域的开源 Harness。\n\n为什么这玩意儿这么香？我来给大家详细讲一讲：\n以前大家做 AI 视频最头疼的两件事：\n1、视频模型是个抽卡黑盒，只给一段写死的 MP4，改一个字就得整条视频重抽，费钱、费时间。\n2、传统剪辑软件是给人手拖时间线设计的，让 Agent 去对时间码和图层，根本没法自动化",
+      "metrics": {
+        "bookmark_count": 1559,
+        "impression_count": 76129,
+        "like_count": 989,
+        "quote_count": 18,
+        "reply_count": 159,
+        "repost_count": 167
+      }
+    },
+    {
+      "id": "2099784285775593630",
+      "url": "https://x.com/i/status/2099784285775593630",
+      "created_at": "2026-09-15T08:56:00.000Z",
+      "author": "dingyi",
+      "author_name": "Ding",
+      "text": "这个不错，一个面向 AI Agent 的高质量动画 React 组件库。\n\n核心功能与特点：\n\n- AI Agent 极速集成：提供 Spectrum UI MCP（Model Context Protocol）。配置一次后，即可直接指令 AI 工具在项目中一键安装并关联 250+ 个动画组件。\n- 技术栈：基于 shadcn/ui、Tailwind CSS、Framer Motion 和 Next.js 构建。\n\nhttps://t.co/2XHuH7zzq8",
+      "metrics": {
+        "bookmark_count": 345,
+        "impression_count": 19387,
+        "like_count": 290,
+        "quote_count": 1,
+        "reply_count": 20,
+        "repost_count": 29
+      }
+    },
+    {
+      "id": "2099783476132057121",
+      "url": "https://x.com/i/status/2099783476132057121",
+      "created_at": "2026-09-15T08:52:47.000Z",
+      "author": "mattpocockuk",
+      "author_name": "Matt Pocock",
+      "text": "Will probably remove this skill in the next version.\n\nIMO this is a harness concern, not a skill concern.\n\nAnyone object?\n\nhttps://t.co/mGVBlldPgL",
+      "metrics": {
+        "bookmark_count": 131,
+        "impression_count": 87509,
+        "like_count": 519,
+        "quote_count": 2,
+        "reply_count": 84,
+        "repost_count": 6
+      }
+    },
+    {
+      "id": "2099658399558341119",
+      "url": "https://x.com/i/status/2099658399558341119",
+      "created_at": "2026-09-15T00:35:46.000Z",
+      "author": "AlchainHust",
+      "author_name": "花叔",
+      "text": "https://t.co/6kUzdvY1a4",
+      "metrics": {
+        "bookmark_count": 215,
+        "impression_count": 41548,
+        "like_count": 87,
+        "quote_count": 4,
+        "reply_count": 7,
+        "repost_count": 7
+      }
+    },
+    {
+      "id": "2099746344466579566",
+      "url": "https://x.com/i/status/2099746344466579566",
+      "created_at": "2026-09-15T06:25:14.000Z",
+      "author": "Zhiyu333",
+      "author_name": "躺在废墟里 Lieflat",
+      "text": "一个基于283万字的去 AI 味 skill，希望用语言学来量化什么是 AI 味。最近还会有大量更新，可以关注交流～ https://t.co/IpJakWdkHj",
+      "metrics": {
+        "bookmark_count": 1959,
+        "impression_count": 191339,
+        "like_count": 870,
+        "quote_count": 19,
+        "reply_count": 60,
+        "repost_count": 130
+      }
+    },
+    {
+      "id": "2099511202431021236",
+      "url": "https://x.com/i/status/2099511202431021236",
+      "created_at": "2026-09-14T14:50:52.000Z",
+      "author": "jsuarez",
+      "author_name": "Joseph Suarez 🐡",
+      "text": "Releasing PufferLib 5.0: Train agents in under a second https://t.co/2BGDn5CCXB",
+      "metrics": {
+        "bookmark_count": 1309,
+        "impression_count": 152733,
+        "like_count": 1771,
+        "quote_count": 28,
+        "reply_count": 47,
+        "repost_count": 154
+      }
+    },
+    {
+      "id": "2099760094590500869",
+      "url": "https://x.com/i/status/2099760094590500869",
+      "created_at": "2026-09-15T07:19:52.000Z",
+      "author": "dontbesilent",
+      "author_name": "dontbesilent",
+      "text": "上海人工智能实验室推了一个新模型，叫 Atria Dawn Preview，他们晒了几个案例挺有意思的  \n\n一个是把《红楼梦》里的大观园做成了可以漫游的三维场景，另一个是火灾逃生教育游戏  \n\n这两个案例适合放在知识内容后面  \n\n比如讲《红楼梦》，文稿里分析人物关系，配一个大观园的三维场景，方便读者查看人物住处和建筑布局  \n\n讲消防知识，视频里解释注意事项，再配一个逃生游戏，让观众试试自己遇到具体情况会怎么选  \n\n文章和视频讲完以后，观众还有东西可以接着体验  \n\n对于知识博主来说，虽然选题和传播需要自己拿主意。但现在做内容多了一种可能性。可以在",
+      "metrics": {
+        "bookmark_count": 36,
+        "impression_count": 19116,
+        "like_count": 92,
+        "quote_count": 1,
+        "reply_count": 53,
+        "repost_count": 17
+      }
+    },
+    {
+      "id": "2099534649257033746",
+      "url": "https://x.com/i/status/2099534649257033746",
+      "created_at": "2026-09-14T16:24:02.000Z",
+      "author": "ryaneshea",
+      "author_name": "Ryan Shea",
+      "text": "Wait, so Pantheon was prescient after all?\n\nArtificial Intelligence requires obscene amounts of compute to discover effective but inefficient networks.\n\nMeanwhile, Uploaded Intelligence let's us take systems from nature that vastly surpass AI's on a per byte and per watt basis. h",
+      "metrics": {
+        "bookmark_count": 1520,
+        "impression_count": 271363,
+        "like_count": 4165,
+        "quote_count": 33,
+        "reply_count": 87,
+        "repost_count": 228
+      }
+    },
+    {
+      "id": "2099490911822794901",
+      "url": "https://x.com/i/status/2099490911822794901",
+      "created_at": "2026-09-14T13:30:14.000Z",
+      "author": "AtriaASI",
+      "author_name": "Atria ASI",
+      "text": "Introducing Atria Dawn Preview:\nFrom Research Questions to Verifiable Results.\n\nAtria Dawn Preview is an agentic foundation model built for long-horizon tasks, helping researchers and engineers turn open-ended questions into executable, verifiable, and reproducible outcomes.\n\nExp",
+      "metrics": {
+        "bookmark_count": 1241,
+        "impression_count": 4307464,
+        "like_count": 2467,
+        "quote_count": 510,
+        "reply_count": 318,
+        "repost_count": 394
+      }
+    },
+    {
+      "id": "2099568490004824263",
+      "url": "https://x.com/i/status/2099568490004824263",
+      "created_at": "2026-09-14T18:38:30.000Z",
+      "author": "skalskip92",
+      "author_name": "SkalskiP",
+      "text": "supervision crossed 50,000 GitHub stars\n\n5,131 commits, 1,732 PRs, 188 contributors\n\nthank you for building this with me\n\nlink: https://t.co/xXMRaS3Guk https://t.co/HIoKAXrbox",
+      "metrics": {
+        "bookmark_count": 1059,
+        "impression_count": 51791,
+        "like_count": 981,
+        "quote_count": 4,
+        "reply_count": 15,
+        "repost_count": 81
+      }
+    },
+    {
+      "id": "2099365190668034496",
+      "url": "https://x.com/i/status/2099365190668034496",
+      "created_at": "2026-09-14T05:10:40.000Z",
+      "author": "leo_xiaolei",
+      "author_name": "XiaoLei Liu",
+      "text": "【公众号观察】 给大家拆解一个日常 10w+ 的贴图号，CodeX 就可以运营\n\n这个号的赛道是：女性成长\n \n听到这个赛道，观众老爷们是不是觉得太红海了，没什么前途\n \n我可以告诉你大家，这个号粉丝量不多，运营时间也不长，就是纯靠内容和赛道换来的流量\n在我的观察下，这个号实则还另藏玄机，他实际的赛道是：女性再成长\n \n核心就在于这个“再”子，以一个 40 岁左右的角色，讲述自己在家庭、心理、地位、金钱、工作等的第二番思考\n \n面向对象也不再是年轻女性，而是中年女性\n \n这类女性有几个特点，无论是结婚还是没结婚的，通常都经历了社会、家庭、人性的一轮毒打\n",
+      "metrics": {
+        "bookmark_count": 124,
+        "impression_count": 6692,
+        "like_count": 128,
+        "quote_count": 0,
+        "reply_count": 1,
+        "repost_count": 12
+      }
+    },
+    {
+      "id": "2099459270702174334",
+      "url": "https://x.com/i/status/2099459270702174334",
+      "created_at": "2026-09-14T11:24:30.000Z",
+      "author": "Sunkeke_AI",
+      "author_name": "孙可可",
+      "text": "看过好几个公众号排版的skill，我觉得最方便的还是自己目前在用的一个 Obsidian 公众号发布助手插件，因为我现在内容创作基本都在 Obsidian 里完成。\n\n我写完之后，只是想有个工具快速帮我排版和发布，并且发布前可以预览，每次基本大差不差看一眼就发布了，大道至简，能满足基本需求发布出去最重要！\n\nhttps://t.co/d0RXylUUG7",
+      "metrics": {
+        "bookmark_count": 59,
+        "impression_count": 3778,
+        "like_count": 34,
+        "quote_count": 0,
+        "reply_count": 9,
+        "repost_count": 3
+      }
+    },
+    {
+      "id": "2099736121781764594",
+      "url": "https://x.com/i/status/2099736121781764594",
+      "created_at": "2026-09-15T05:44:37.000Z",
+      "author": "KinGao476942",
+      "author_name": "Kin",
+      "text": "https://t.co/8bmB8DFR4X",
+      "metrics": {
+        "bookmark_count": 210,
+        "impression_count": 23870,
+        "like_count": 139,
+        "quote_count": 15,
+        "reply_count": 18,
+        "repost_count": 20
+      }
+    },
+    {
+      "id": "2099122692519842097",
+      "url": "https://x.com/i/status/2099122692519842097",
+      "created_at": "2026-09-13T13:07:04.000Z",
+      "author": "knowledgefxg",
+      "author_name": "知识分享官",
+      "text": "相见恨晚啊，又挖到一个宝藏YouTube博主：Flash bytes\n\n频道定位就是用十来分钟的时间讲解各种技术领域，属于快速扫盲式讲解，最近正好最近在学Linux，里面有相关的入门视频内容，制作的很用心，质量很高，讲解的也很风趣易懂，感兴趣的可以收藏一波 https://t.co/qy1JRLgHF1",
+      "metrics": {
+        "bookmark_count": 993,
+        "impression_count": 46431,
+        "like_count": 842,
+        "quote_count": 1,
+        "reply_count": 27,
+        "repost_count": 192
+      }
+    },
+    {
+      "id": "2099485691361346011",
+      "url": "https://x.com/i/status/2099485691361346011",
+      "created_at": "2026-09-14T13:09:30.000Z",
+      "author": "shenghouxuyao",
+      "author_name": "诺诺",
+      "text": "我用 Codex 从零到一，自动剪出了一条 2 分 54 秒的知识视频 https://t.co/nfMFxRvk6T",
+      "metrics": {
+        "bookmark_count": 329,
+        "impression_count": 15693,
+        "like_count": 214,
+        "quote_count": 1,
+        "reply_count": 20,
+        "repost_count": 59
+      }
+    },
+    {
+      "id": "2099705516129992944",
+      "url": "https://x.com/i/status/2099705516129992944",
+      "created_at": "2026-09-15T03:43:00.000Z",
+      "author": "Astronaut_1216",
+      "author_name": "叫我阿杭",
+      "text": "我靠我靠我靠！！！！这回跨境电商真的要大洗牌了，不用hypit的公司一定会死掉，真的是我见过至今为止最牛逼的克隆Video AI产品，这个做素材的效率真的太高了，而且这个产品现在已经开源了，直接在GitHub上就能找得到！！这样的项目赶紧点个star，不然之后找不到了\n\n一条 26 秒的 YouTube Shorts，加一张同时拍到两只银猫的生活照，我真的用 Hypit 复刻出了一条 26.13 秒的新视频\n\n我说的只有一句：/hypit 模仿这个YouTube Shorts视频保留原视频的榜单结构、四个动作笑点和竖屏节奏，把角色全部换成照片里的两只猫\n",
+      "metrics": {
+        "bookmark_count": 1002,
+        "impression_count": 110962,
+        "like_count": 686,
+        "quote_count": 4,
+        "reply_count": 93,
+        "repost_count": 155
+      }
+    },
+    {
+      "id": "2099657261488787639",
+      "url": "https://x.com/i/status/2099657261488787639",
+      "created_at": "2026-09-15T00:31:15.000Z",
+      "author": "gengdaJ",
+      "author_name": "逸尘",
+      "text": "卧槽！Hypit太特喵变态了！\n接入你的Codex，就能复刻任意爆款视频！\n是真的任意，真的复刻！\n\n我用Codex 复刻了两个Instagram爆款视频，简直有九分相似！（还有一个放评论区了）\n不信的话请查看原视频：\nhttps://t.co/JeoVRd7mZv\nhttps://t.co/ikp9dQlJbK\n\n制作难度嘛，很简单，四个步骤轻松搞定✋：\n1. 找到爆款视频\n2.把链接地址发给Codex，安装Hypit Skill，让Codex“/hypit，帮我复刻这个爆款视频”\n3.零花费生成占位素材，如果有误差，让Codex继续调整字幕，保证准确",
+      "metrics": {
+        "bookmark_count": 1282,
+        "impression_count": 82550,
+        "like_count": 823,
+        "quote_count": 10,
+        "reply_count": 109,
+        "repost_count": 130
+      }
+    },
+    {
+      "id": "2099396451340329422",
+      "url": "https://x.com/i/status/2099396451340329422",
+      "created_at": "2026-09-14T07:14:53.000Z",
+      "author": "MrBrjan",
+      "author_name": "Brjan | AI Builder",
+      "text": "Be honest, builders:\n\nI’m thinking about switching from Vercel to Cloudflare.\n\nShould I? 👀\n\nWhat am I missing? https://t.co/n5XYbLEWQ4",
+      "metrics": {
+        "bookmark_count": 100,
+        "impression_count": 34912,
+        "like_count": 226,
+        "quote_count": 4,
+        "reply_count": 149,
+        "repost_count": 6
+      }
+    },
+    {
+      "id": "2099627078660624419",
+      "url": "https://x.com/i/status/2099627078660624419",
+      "created_at": "2026-09-14T22:31:19.000Z",
+      "author": "kunchenguid",
+      "author_name": "Kun Chen",
+      "text": "oooh this looks nice - a handy little skill to generate animated presentational videos https://t.co/Kcn8UPnt1t",
+      "metrics": {
+        "bookmark_count": 389,
+        "impression_count": 33416,
+        "like_count": 196,
+        "quote_count": 0,
+        "reply_count": 5,
+        "repost_count": 11
+      }
+    }
+  ]
+}
