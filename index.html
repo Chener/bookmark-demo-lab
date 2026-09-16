@@ -1513,6 +1513,31 @@
         return "";
       }
 
+      // Shipped-card demo links: same-origin relative paths only (leading slash OK).
+      function safeRelativePath(path, slug) {
+        const raw = String(path || "").trim();
+        const normalized = raw.replace(/^\/+/, "");
+        const hasScheme = /^[a-zA-Z][a-zA-Z0-9+.-]*:/.test(normalized);
+        const isProtocolRelative = normalized.slice(0, 2) === "//";
+        const hasBackslash = normalized.indexOf("\\") !== -1;
+        const hasDotDot = normalized.split("/").indexOf("..") !== -1;
+        if (
+          normalized &&
+          normalized !== "#" &&
+          !hasScheme &&
+          !isProtocolRelative &&
+          !hasBackslash &&
+          !hasDotDot
+        ) {
+          return normalized;
+        }
+        const s = String(slug || "").trim();
+        if (/^[A-Za-z0-9][A-Za-z0-9._-]*$/.test(s)) {
+          return "apps/" + s + "/";
+        }
+        return "#";
+      }
+
       function getFingerprint() {
         try {
           let fp = localStorage.getItem(FP_STORAGE_KEY);
@@ -2412,8 +2437,7 @@
 
             const enterBtn = document.createElement("a");
             enterBtn.className = "card-enter-btn";
-            const demoPath = item.path || (item.slug ? "apps/" + item.slug + "/" : "#");
-            enterBtn.href = String(demoPath).replace(/^\//, "");
+            enterBtn.href = safeRelativePath(item.path, item.slug);
             enterBtn.textContent = "体验演示 ↗";
 
             btm.append(authSpan, enterBtn);
