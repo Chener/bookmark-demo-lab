@@ -1,0 +1,114 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>同题四车 — bookmark-demo-lab</title>
+  <meta name="description" content="同一游戏提示词，四条车道从零发车：DeepSeek↔Astra 子代理，以及各自独跑。静态迷你卡丁车道可视化。" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@400;500;700;900&family=JetBrains+Mono:wght@500;700&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <div class="sky" aria-hidden="true"></div>
+  <div class="haze" aria-hidden="true"></div>
+
+  <header class="top">
+    <a class="hub" href="../../">← 实验室主页</a>
+    <p class="path"><code>apps/agent-kart-quad</code></p>
+    <a class="origin" href="https://x.com/superalesha/status/2099836448044175427" target="_blank" rel="noopener noreferrer">原帖 @superalesha</a>
+  </header>
+
+  <main>
+    <section class="intro">
+      <p class="eyebrow">静态致敬 · 四车道对照板</p>
+      <h1>同题四车</h1>
+      <p class="lede">
+        给 DeepSeek 一个 Astra 子代理，再给 Astra 一个 DeepSeek 子代理，然后让两边各自独跑。
+        同一条游戏提示词，四次从零开建。这里把那场实验收成可点的迷你赛道：交叉对独跑，一眼看清四套脾气。
+      </p>
+      <blockquote class="quote">
+        <p>I gave DeepSeek an Astra subagent. Then I gave Astra a DeepSeek subagent.</p>
+        <p>Then I made both work alone, because apparently I needed 4 versions of Mario Kart.</p>
+        <p>Same game prompt, each build from scratch. Astra on medium reasoning, DeepSeek on max throughout. I just wanted to see</p>
+        <cite>
+          <a href="https://x.com/superalesha/status/2099836448044175427" target="_blank" rel="noopener noreferrer">@superalesha</a>
+        </cite>
+      </blockquote>
+    </section>
+
+    <section class="board" id="board" aria-label="四车道对照板">
+      <div class="board-sticky">
+        <div class="board-head">
+          <div>
+            <p class="kicker">同题提示 · 本页演示用</p>
+            <h2>从零做一款可玩迷你卡丁车：四车道并排、可发车、可重赛。不要套现成引擎。</h2>
+            <p class="prompt-note">这是本页对照用的提示词，不是原帖里贴出的原文。</p>
+          </div>
+          <div class="matrix" aria-label="交叉与独跑矩阵">
+            <span class="matrix-corner"></span>
+            <span class="matrix-col">带子代理</span>
+            <span class="matrix-col">独跑</span>
+            <span class="matrix-row">DeepSeek</span>
+            <button type="button" class="cell" data-focus="ds-astra" aria-pressed="false">DS ← Astra</button>
+            <button type="button" class="cell" data-focus="ds-solo" aria-pressed="false">DS 独跑</button>
+            <span class="matrix-row">Astra</span>
+            <button type="button" class="cell" data-focus="astra-ds" aria-pressed="false">Astra ← DS</button>
+            <button type="button" class="cell" data-focus="astra-solo" aria-pressed="false">Astra 独跑</button>
+          </div>
+        </div>
+
+        <div class="controls" role="toolbar" aria-label="赛道控制">
+          <button type="button" class="go" id="go" aria-pressed="false">发车</button>
+          <button type="button" id="reset">重赛</button>
+          <button type="button" id="clear-focus">看全部</button>
+          <p class="clock" id="clock" aria-live="polite">待机 0.00s</p>
+          <p class="hint">空格发车 · R 重赛 · 1–4 聚焦车道</p>
+        </div>
+      </div>
+
+      <div class="circuit" id="circuit">
+        <div class="countdown" id="countdown" hidden aria-live="assertive"></div>
+        <div class="lanes" id="lanes"></div>
+      </div>
+
+      <aside class="inspect" id="inspect" aria-live="polite">
+        <p class="inspect-kicker">点车道或矩阵看这一车</p>
+        <h3 id="inspect-title">四车同题，脾气不同</h3>
+        <p id="inspect-body">交叉两车互相借力，独跑两车只靠自己。发车后看起步、抓地和冲线，不要只看谁先到。</p>
+        <dl class="spec" id="inspect-spec"></dl>
+        <ol class="build" id="inspect-build"></ol>
+      </aside>
+    </section>
+
+    <section class="legend">
+      <h2>怎么读这四条车道</h2>
+      <ul>
+        <li><strong>DeepSeek ← Astra</strong>：DeepSeek 全程 max，Astra 当子代理补交互细节。起步略想，路线最稳。</li>
+        <li><strong>Astra ← DeepSeek</strong>：Astra 用 medium，DeepSeek 当子代理补规则。出手快，路线会晃。</li>
+        <li><strong>DeepSeek 独跑</strong>：没有子代理。max 推理热身更长，后期最完整。</li>
+        <li><strong>Astra 独跑</strong>：没有子代理。medium 先能玩，车体更简，细节更少。</li>
+      </ul>
+      <p class="legend-note">
+        这是静态网页原作致敬，不是四套真实模型在线对打，也不调用任何第三方模型子代理。
+        赛道性格按原帖设定写成可玩对照：Astra medium、DeepSeek max、同一提示词、各自从零构建。
+      </p>
+    </section>
+  </main>
+
+  <footer class="foot">
+    <p>
+      灵感来自
+      <a href="https://x.com/superalesha/status/2099836448044175427">@superalesha</a>
+      的四版卡丁车实验。这是原创静态致敬，不含原作源码、不含 Workers、不含自定义域。
+    </p>
+    <a href="../../">返回实验室主页</a>
+  </footer>
+
+  <noscript>
+    <p class="noscript">请启用 JavaScript 以发车并对照四条车道。</p>
+  </noscript>
+  <script src="app.js"></script>
+</body>
+</html>

@@ -2,6 +2,23 @@
   "version": 1,
   "items": [
     {
+      "id": "2099836448044175427",
+      "url": "https://x.com/superalesha/status/2099836448044175427",
+      "slug": "agent-kart-quad",
+      "title": "Four Mario Kart builds: DeepSeek↔Astra subagent / solo",
+      "titleZh": "同题四车：DeepSeek ↔ Astra 子代理 / 独跑",
+      "hubTitle": "同题四车",
+      "blurbZh": "同一游戏提示词，四条车道同时从零发车。",
+      "rationaleZh": "原帖把同一游戏提示词做成四版卡丁车：交叉子代理对独跑。做成四车道对照，才能一眼比较起步、抓地和完成度。",
+      "author": "superalesha",
+      "processedAt": "2026-09-16T06:17:00.000Z",
+      "path": "/apps/agent-kart-quad/",
+      "subscriptionZh": "Cursor Ultra",
+      "modelZh": "grok-4.6",
+      "harnessZh": "Cursor Cloud Agent",
+      "environmentZh": "Cursor Cloud Agent 托管机"
+    },
+    {
       "id": "2099920497383440599",
       "url": "https://x.com/GeekCatX/status/2099920497383440599",
       "slug": "google-creator-kit",
