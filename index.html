@@ -1588,6 +1588,14 @@
         return String(state.config && state.config.voteApiBase || "").trim().replace(/\/$/, "");
       }
 
+      function setStackPill(el, label, value) {
+        if (!el) return;
+        el.replaceChildren();
+        const b = document.createElement("b");
+        b.textContent = label;
+        el.append(b, document.createTextNode(value == null ? "" : String(value)));
+      }
+
       async function refreshLiveWindow() {
         if (state.windowRefreshing) return;
         state.windowRefreshing = true;
@@ -1643,17 +1651,22 @@
         return res.json();
       }
 
-      // live /api/window 优先，失败降级本地 ballot-window.json
+      // live /api/window 可达时其否定响应为权威（404 missing_window / ok:false / 无 window → null，隐藏投票）
+      // 仅在 apiBase 为空，或 live fetch 抛错/网络失败时，才降级 tracking/ballot-window.json
       async function loadWindow(apiBase) {
         if (apiBase) {
           try {
             const liveRes = await fetch(apiBase + "/api/window", { cache: "no-store" });
-            if (liveRes.ok) {
-              const liveData = await liveRes.json();
-              if (liveData && liveData.ok && liveData.window) {
-                return liveData.window;
-              }
+            let liveData = null;
+            try {
+              liveData = await liveRes.json();
+            } catch (_) {
+              liveData = null;
             }
+            if (liveData && liveData.ok && liveData.window) {
+              return liveData.window;
+            }
+            return null;
           } catch (err) {
             console.warn("Live /api/window 连接失败，降级本地:", err);
           }
@@ -1728,9 +1741,9 @@
         // 阶段 2：开发中 (显示胜出/当前技术栈)
         const ledgerWin = state.ledger && state.ledger.winningStack;
         if (ledgerWin) {
-          if (ledgerWin.fuel) document.getElementById("pipe-pill-fuel").innerHTML = "<b>燃料</b>" + ledgerWin.fuel;
-          if (ledgerWin.harness) document.getElementById("pipe-pill-harness").innerHTML = "<b>载体</b>" + ledgerWin.harness;
-          if (ledgerWin.environment) document.getElementById("pipe-pill-env").innerHTML = "<b>环境</b>" + ledgerWin.environment;
+          if (ledgerWin.fuel) setStackPill(document.getElementById("pipe-pill-fuel"), "燃料", ledgerWin.fuel);
+          if (ledgerWin.harness) setStackPill(document.getElementById("pipe-pill-harness"), "载体", ledgerWin.harness);
+          if (ledgerWin.environment) setStackPill(document.getElementById("pipe-pill-env"), "环境", ledgerWin.environment);
         }
 
         // 阶段 3：开发后
@@ -1976,10 +1989,13 @@
           inp.value = item;
           if (item === defaultVal || (!defaultVal && idx === 0)) inp.checked = true;
 
-          const span = document.createElement("div");
-          span.innerHTML = '<span class="choice-title">' + item + '</span>';
+          const wrap = document.createElement("div");
+          const title = document.createElement("span");
+          title.className = "choice-title";
+          title.textContent = item;
+          wrap.append(title);
 
-          lab.append(inp, span);
+          lab.append(inp, wrap);
           box.append(lab);
         });
       }
@@ -2001,7 +2017,13 @@
           if (idx === 0) inp.checked = true;
 
           const body = document.createElement("div");
-          body.innerHTML = '<span class="choice-title">' + m.name + '</span><span class="choice-note">' + m.note + '</span>';
+          const title = document.createElement("span");
+          title.className = "choice-title";
+          title.textContent = m.name;
+          const note = document.createElement("span");
+          note.className = "choice-note";
+          note.textContent = m.note;
+          body.append(title, note);
 
           lab.append(inp, body);
           box.append(lab);
@@ -2061,14 +2083,10 @@
         // 同步流水线「开发中」展示卡
         const curModel = String(form.elements["model"] ? form.elements["model"].value : "grok-4.6");
         const curEnv = String(fd.get("environment") || "Cloud Agent 托管机");
-        const fuelPill = document.getElementById("pipe-pill-fuel");
-        const modelPill = document.getElementById("pipe-pill-model");
-        const harnessPill = document.getElementById("pipe-pill-harness");
-        const envPill = document.getElementById("pipe-pill-env");
-        if (fuelPill) fuelPill.innerHTML = "<b>燃料</b>" + selFuel;
-        if (modelPill) modelPill.innerHTML = "<b>模型</b>" + curModel;
-        if (harnessPill) harnessPill.innerHTML = "<b>载体</b>" + selHarness;
-        if (envPill) envPill.innerHTML = "<b>环境</b>" + curEnv;
+        setStackPill(document.getElementById("pipe-pill-fuel"), "燃料", selFuel);
+        setStackPill(document.getElementById("pipe-pill-model"), "模型", curModel);
+        setStackPill(document.getElementById("pipe-pill-harness"), "载体", selHarness);
+        setStackPill(document.getElementById("pipe-pill-env"), "环境", curEnv);
       }
 
       function bindCascadingConstraints() {
@@ -2223,18 +2241,29 @@
         ["fuel", "harness", "environment"].forEach(kind => {
           const col = document.createElement("div");
           col.className = "tally-group";
-          col.innerHTML = "<h4>" + labels[kind] + "</h4>";
+          const h4 = document.createElement("h4");
+          h4.textContent = labels[kind];
+          col.append(h4);
 
           const map = tallies[kind] || {};
           const keys = Object.keys(map).sort((a, b) => (map[b] || 0) - (map[a] || 0));
 
           if (!keys.length) {
-            col.innerHTML += '<p style="font-size:0.72rem;color:var(--ink-faint);margin:0;">暂无票</p>';
+            const empty = document.createElement("p");
+            empty.style.fontSize = "0.72rem";
+            empty.style.color = "var(--ink-faint)";
+            empty.style.margin = "0";
+            empty.textContent = "暂无票";
+            col.append(empty);
           } else {
             keys.forEach(k => {
               const row = document.createElement("div");
               row.className = "tally-bar-row";
-              row.innerHTML = '<span>' + k + '</span><b>' + map[k] + ' 票</b>';
+              const name = document.createElement("span");
+              name.textContent = k;
+              const count = document.createElement("b");
+              count.textContent = map[k] + " 票";
+              row.append(name, count);
               col.append(row);
             });
           }
@@ -2246,8 +2275,13 @@
         if (winBox && state.ledger) {
           const w = state.ledger.winningStack;
           if (w) {
-            winBox.innerHTML = '<b>上一窗结算参考：</b>' + 
-              (w.autoPick ? '上一窗零票（autoPick 自动从军火库启用项选定栈）' : [w.fuel, w.harness, w.environment].filter(Boolean).join(" · "));
+            winBox.replaceChildren();
+            const b = document.createElement("b");
+            b.textContent = "上一窗结算参考：";
+            const rest = w.autoPick
+              ? "上一窗零票（autoPick 自动从军火库启用项选定栈）"
+              : [w.fuel, w.harness, w.environment].filter(Boolean).join(" · ");
+            winBox.append(b, document.createTextNode(rest));
           }
         }
       }
@@ -2280,7 +2314,13 @@
           });
 
           if (!matched.length) {
-            grid.innerHTML = '<p style="grid-column: 1/-1; color: var(--ink-faint); padding: 2rem 0; text-align: center;">没有找到匹配的演示项目</p>';
+            const empty = document.createElement("p");
+            empty.style.gridColumn = "1 / -1";
+            empty.style.color = "var(--ink-faint)";
+            empty.style.padding = "2rem 0";
+            empty.style.textAlign = "center";
+            empty.textContent = "没有找到匹配的演示项目";
+            grid.append(empty);
             return;
           }
 
@@ -2416,7 +2456,12 @@
 
           const titleRow = document.createElement("div");
           titleRow.className = "tier-title";
-          titleRow.innerHTML = '<span>' + (s.titleZh || s.id) + '</span><span class="tier-badge">' + (s.id ? s.id.toUpperCase() : "") + '</span>';
+          const titleName = document.createElement("span");
+          titleName.textContent = s.titleZh || s.id;
+          const titleBadge = document.createElement("span");
+          titleBadge.className = "tier-badge";
+          titleBadge.textContent = s.id ? s.id.toUpperCase() : "";
+          titleRow.append(titleName, titleBadge);
           head.append(titleRow);
 
           if (s.blurbZh) {
