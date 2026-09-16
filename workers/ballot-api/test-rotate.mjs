@@ -21,7 +21,9 @@ import {
   LOCK_TTL_S,
   KV_MIN_TTL_S,
   kvTtl,
-  safeErrorDetail
+  safeErrorDetail,
+  PENDING_LEDGER_KEY,
+  pendingLedgerFrom
 } from "./src/rotate.js";
 
 const CFG = {
@@ -419,9 +421,18 @@ test("skip/lock/fail preserve prior needsGitPush and needsXIngest", async () => 
   assert.equal(storedSkip.needsXIngest, true);
 
   await kv.put("rotate-lock", "held-by-other");
+  const skippedDespiteLock = await runRotate(env, {
+    nowMs: parseIso("2026-09-15T20:00:00.000Z"),
+    skipLock: false,
+    fetchImpl: mockFetch()
+  });
+  assert.equal(skippedDespiteLock.action, "skipped_open");
+  assert.equal(await kv.get("rotate-lock"), "held-by-other");
+
   const locked = await runRotate(env, {
     nowMs: parseIso("2026-09-15T20:00:00.000Z"),
     skipLock: false,
+    force: true,
     fetchImpl: mockFetch()
   });
   assert.equal(locked.error, "locked");
@@ -489,11 +500,11 @@ test("claimLock puts rotate-lock with clamped TTL >= 60 and releases it", async 
   kv.puts = [];
   const env = { BALLOT_KV: kv, ORIGIN: "https://bookmark-demo-lab.pages.dev" };
   const status = await runRotate(env, {
-    nowMs: parseIso("2026-09-15T12:29:00.000Z"),
+    nowMs: parseIso("2026-09-15T16:00:00.000Z"),
     skipLock: false,
     fetchImpl: mockFetch()
   });
-  assert.equal(status.action, "skipped_open");
+  assert.equal(status.action, "rotated");
   const lockPuts = kv.puts.filter(function (p) { return p.key === "rotate-lock"; });
   assert.ok(lockPuts.length >= 1);
   const ttl = lockPuts[0].options.expirationTtl;
@@ -906,6 +917,12 @@ test("vote-ledger put throw after persist returns ledger_failed not rotated", as
     environment: { "Cursor Cloud Agent 托管机": 1 },
     candidate: {}
   }));
+  await kv.put("rotate-status", JSON.stringify({
+    action: "rotated",
+    ok: true,
+    needsGitPush: false,
+    needsXIngest: false
+  }));
   const origPut = kv.put.bind(kv);
   kv.put = async function (key, value, options) {
     if (key === "vote-ledger") {
@@ -927,7 +944,11 @@ test("vote-ledger put throw after persist returns ledger_failed not rotated", as
   assert.equal(status.detail, "KvError");
   assert.doesNotMatch(String(status.detail), /token=abc|ledger_put_failed/);
   assert.notEqual(status.action, "rotated");
+  assert.equal(status.needsGitPush, true);
+  assert.equal(status.needsXIngest, true);
   assert.doesNotMatch(String(status.noteZh || ""), /未改窗/);
+  assert.equal(status.pendingLedger.settledWindowId, "2026-09-15-16");
+  assert.equal(status.pendingLedger.nextWindowId, "2026-09-16-00");
   const next = await kv.get("current-window", "json");
   assert.equal(next.windowId, "2026-09-16-00");
   const ledger = await kv.get("vote-ledger", "json");
@@ -935,4 +956,234 @@ test("vote-ledger put throw after persist returns ledger_failed not rotated", as
   const stored = await kv.get("rotate-status", "json");
   assert.equal(stored.error, "ledger_failed");
   assert.equal(stored.ok, false);
+  assert.equal(stored.needsGitPush, true);
+  assert.equal(stored.needsXIngest, true);
+  assert.equal(stored.pendingLedger.settledWindowId, "2026-09-15-16");
+  const marker = await kv.get(PENDING_LEDGER_KEY, "json");
+  assert.equal(marker.settledWindowId, "2026-09-15-16");
 });
+
+test("skipped_open does not put or delete rotate-lock", async () => {
+  const kv = new MemKV();
+  await kv.put("current-window", JSON.stringify({
+    windowId: "2026-09-15-16",
+    opensAt: "2026-09-15T08:00:00.000Z",
+    closesAt: "2026-09-15T16:00:00.000Z",
+    periodHours: 8,
+    candidates: [],
+    options: { fuel: ["Cursor Ultra"], harness: ["Cursor Cloud Agent"], environment: ["Cursor Cloud Agent 托管机"] }
+  }));
+  kv.puts = [];
+  kv.deletes = [];
+  const origDelete = kv.delete.bind(kv);
+  kv.delete = async function (key) {
+    kv.deletes.push(key);
+    return origDelete(key);
+  };
+  const env = { BALLOT_KV: kv, ORIGIN: "https://bookmark-demo-lab.pages.dev" };
+  const status = await runRotate(env, {
+    nowMs: parseIso("2026-09-15T12:29:00.000Z"),
+    skipLock: false,
+    fetchImpl: mockFetch()
+  });
+  assert.equal(status.action, "skipped_open");
+  const lockPuts = kv.puts.filter(function (p) { return p.key === "rotate-lock"; });
+  assert.equal(lockPuts.length, 0);
+  assert.equal(kv.deletes.filter(function (k) { return k === "rotate-lock"; }).length, 0);
+  assert.equal(await kv.get("rotate-lock"), null);
+});
+
+test("force while window is open still takes the lock path", async () => {
+  const kv = new MemKV();
+  await kv.put("current-window", JSON.stringify({
+    windowId: "2026-09-15-16",
+    opensAt: "2026-09-15T08:00:00.000Z",
+    closesAt: "2026-09-15T16:00:00.000Z",
+    periodHours: 8,
+    candidates: [],
+    options: { fuel: ["Cursor Ultra"], harness: ["Cursor Cloud Agent"], environment: ["Cursor Cloud Agent 托管机"] }
+  }));
+  kv.puts = [];
+  const env = { BALLOT_KV: kv, ORIGIN: "https://bookmark-demo-lab.pages.dev" };
+  const status = await runRotate(env, {
+    nowMs: parseIso("2026-09-15T12:29:00.000Z"),
+    skipLock: false,
+    force: true,
+    fetchImpl: mockFetch()
+  });
+  assert.equal(status.action, "rotated");
+  const lockPuts = kv.puts.filter(function (p) { return p.key === "rotate-lock"; });
+  assert.ok(lockPuts.length >= 1);
+  assert.equal(await kv.get("rotate-lock"), null);
+});
+
+test("pending ledger retries while next window is still open", async () => {
+  const kv = new MemKV();
+  await kv.put("current-window", JSON.stringify({
+    windowId: "2026-09-16-00",
+    opensAt: "2026-09-15T16:00:00.000Z",
+    closesAt: "2026-09-16T00:00:00.000Z",
+    periodHours: 8,
+    candidates: [],
+    options: { fuel: ["Cursor Ultra"], harness: ["Cursor Cloud Agent"], environment: ["Cursor Cloud Agent 托管机"] }
+  }));
+  await kv.put("tally:2026-09-15-16", JSON.stringify({
+    voteCount: 2,
+    fuel: { "Cursor Ultra": 2 },
+    harness: { "Cursor Cloud Agent": 2 },
+    environment: { "Cursor Cloud Agent 托管机": 2 },
+    candidate: {}
+  }));
+  await kv.put("rotate-status", JSON.stringify({
+    action: "error",
+    error: "ledger_failed",
+    ok: false,
+    needsGitPush: true,
+    needsXIngest: true,
+    pendingLedger: {
+      settledWindowId: "2026-09-15-16",
+      nextWindowId: "2026-09-16-00",
+      ballot: { windowId: "2026-09-15-16", candidates: [] }
+    }
+  }));
+  const env = { BALLOT_KV: kv, ORIGIN: "https://bookmark-demo-lab.pages.dev" };
+  const status = await runRotate(env, {
+    nowMs: parseIso("2026-09-15T20:00:00.000Z"),
+    skipLock: true,
+    fetchImpl: mockFetch()
+  });
+  assert.equal(status.ok, true);
+  assert.equal(status.action, "rotated");
+  assert.equal(status.settledWindowId, "2026-09-15-16");
+  assert.equal(status.nextWindowId, "2026-09-16-00");
+  assert.equal(status.needsGitPush, true);
+  assert.equal(status.needsXIngest, true);
+  assert.equal(status.pendingLedger, undefined);
+  assert.equal(status.voteCount, 2);
+  const ledger = await kv.get("vote-ledger", "json");
+  assert.equal(ledger.settledWindowId, "2026-09-15-16");
+  assert.equal(ledger.voteCount, 2);
+  const stored = await kv.get("rotate-status", "json");
+  assert.equal(stored.action, "rotated");
+  assert.equal(stored.pendingLedger, undefined);
+  assert.equal(stored.error, undefined);
+  assert.equal(await kv.get(PENDING_LEDGER_KEY), null);
+  const still = await kv.get("current-window", "json");
+  assert.equal(still.windowId, "2026-09-16-00");
+});
+
+test("pending ledger KV key retries even if rotate-status lost the marker", async () => {
+  const kv = new MemKV();
+  await kv.put("current-window", JSON.stringify({
+    windowId: "2026-09-16-00",
+    opensAt: "2026-09-15T16:00:00.000Z",
+    closesAt: "2026-09-16T00:00:00.000Z",
+    periodHours: 8,
+    candidates: [],
+    options: { fuel: ["Cursor Ultra"], harness: ["Cursor Cloud Agent"], environment: ["Cursor Cloud Agent 托管机"] }
+  }));
+  await kv.put("tally:2026-09-15-16", JSON.stringify({
+    voteCount: 1,
+    fuel: { "Cursor Ultra": 1 },
+    harness: { "Cursor Cloud Agent": 1 },
+    environment: { "Cursor Cloud Agent 托管机": 1 },
+    candidate: {}
+  }));
+  await kv.put("rotate-status", JSON.stringify({
+    action: "error",
+    error: "ledger_failed",
+    ok: false,
+    needsGitPush: false,
+    needsXIngest: false
+  }));
+  await kv.put(PENDING_LEDGER_KEY, JSON.stringify({
+    settledWindowId: "2026-09-15-16",
+    nextWindowId: "2026-09-16-00",
+    ballot: { windowId: "2026-09-15-16", candidates: [] }
+  }));
+  const env = { BALLOT_KV: kv, ORIGIN: "https://bookmark-demo-lab.pages.dev" };
+  const status = await runRotate(env, {
+    nowMs: parseIso("2026-09-15T20:00:00.000Z"),
+    skipLock: true,
+    fetchImpl: mockFetch()
+  });
+  assert.equal(status.action, "rotated");
+  assert.equal(status.needsGitPush, true);
+  assert.equal(status.needsXIngest, true);
+  const ledger = await kv.get("vote-ledger", "json");
+  assert.equal(ledger.settledWindowId, "2026-09-15-16");
+  assert.equal(await kv.get(PENDING_LEDGER_KEY), null);
+});
+
+test("pending ledger retry that still fails does not skipped_open or drop the marker", async () => {
+  const kv = new MemKV();
+  await kv.put("current-window", JSON.stringify({
+    windowId: "2026-09-16-00",
+    opensAt: "2026-09-15T16:00:00.000Z",
+    closesAt: "2026-09-16T00:00:00.000Z",
+    periodHours: 8,
+    candidates: [],
+    options: { fuel: ["Cursor Ultra"], harness: ["Cursor Cloud Agent"], environment: ["Cursor Cloud Agent 托管机"] }
+  }));
+  await kv.put("tally:2026-09-15-16", JSON.stringify({
+    voteCount: 1,
+    fuel: { "Cursor Ultra": 1 },
+    harness: { "Cursor Cloud Agent": 1 },
+    environment: { "Cursor Cloud Agent 托管机": 1 },
+    candidate: {}
+  }));
+  await kv.put("rotate-status", JSON.stringify({
+    action: "error",
+    error: "ledger_failed",
+    ok: false,
+    needsGitPush: false,
+    needsXIngest: false,
+    pendingLedger: {
+      settledWindowId: "2026-09-15-16",
+      nextWindowId: "2026-09-16-00",
+      ballot: { windowId: "2026-09-15-16", candidates: [] }
+    }
+  }));
+  const origPut = kv.put.bind(kv);
+  kv.put = async function (key, value, options) {
+    if (key === "vote-ledger") {
+      const err = new Error("still_quota");
+      err.name = "KvError";
+      throw err;
+    }
+    return origPut(key, value, options);
+  };
+  const env = { BALLOT_KV: kv, ORIGIN: "https://bookmark-demo-lab.pages.dev" };
+  const status = await runRotate(env, {
+    nowMs: parseIso("2026-09-15T20:00:00.000Z"),
+    skipLock: true,
+    fetchImpl: mockFetch()
+  });
+  assert.equal(status.ok, false);
+  assert.equal(status.action, "error");
+  assert.equal(status.error, "ledger_failed");
+  assert.notEqual(status.action, "skipped_open");
+  assert.equal(status.needsGitPush, true);
+  assert.equal(status.needsXIngest, true);
+  assert.equal(status.pendingLedger.settledWindowId, "2026-09-15-16");
+  const ledger = await kv.get("vote-ledger", "json");
+  assert.equal(ledger, null);
+  const stored = await kv.get("rotate-status", "json");
+  assert.equal(stored.error, "ledger_failed");
+  assert.equal(stored.needsGitPush, true);
+  assert.equal(stored.needsXIngest, true);
+  assert.equal(stored.pendingLedger.settledWindowId, "2026-09-15-16");
+  const still = await kv.get("current-window", "json");
+  assert.equal(still.windowId, "2026-09-16-00");
+});
+
+test("pendingLedgerFrom prefers rotate-status marker then KV key", () => {
+  assert.equal(pendingLedgerFrom(null, null), null);
+  const fromStatus = pendingLedgerFrom({
+    pendingLedger: { settledWindowId: "a", nextWindowId: "b" }
+  }, { settledWindowId: "kv" });
+  assert.equal(fromStatus.settledWindowId, "a");
+  const fromKv = pendingLedgerFrom({ error: "ledger_failed" }, { settledWindowId: "kv" });
+  assert.equal(fromKv.settledWindowId, "kv");
+});
+
