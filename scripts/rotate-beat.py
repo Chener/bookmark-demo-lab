@@ -11,8 +11,10 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import re
 import subprocess
 import sys
+import tempfile
 import urllib.error
 import urllib.request
 from urllib.parse import quote
@@ -28,8 +30,12 @@ ARSENAL_PATH = TRACKING / "arsenal.json"
 BALLOT_PATH = TRACKING / "ballot-window.json"
 LEDGER_PATH = TRACKING / "vote-ledger.json"
 SEEN_PATH = TRACKING / "seen-bookmarks.json"
+INBOX_DIR = TRACKING / "inbox"
+SLIM_LATEST_PATH = INBOX_DIR / "x-bookmarks-slim-latest.json"
+SLIM_FALLBACK_PATH = INBOX_DIR / "x-bookmarks-slim.json"
+SLUG_TOKEN_RE = re.compile(r"[a-z0-9]+")
 
-# TODO(X ingest) sample candidate shape — do not write this fake row into ballot-window.json.
+# Candidate shape for hub「待投票」— never write this placeholder row into ballot-window.json.
 SAMPLE_CANDIDATE = {
     "id": "<tweet-id>",
     "url": "https://x.com/<handle>/status/<tweet-id>",
@@ -396,36 +402,243 @@ def sync_worker_snapshots_to_git(
     return 0
 
 
-def ingest_x_bookmark_increments(period_start: datetime, period_end: datetime) -> list[dict[str, Any]]:
-    """TODO: pull X bookmarks created in [period_start, period_end).
+def resolve_slim_path(explicit: Path | str | None = None) -> Path | None:
+    """Firstmate X MCP slim JSON: env override, else inbox latest / fallback."""
+    if explicit is not None:
+        path = Path(explicit)
+        return path if path.exists() else None
+    env = os.environ.get("X_BOOKMARKS_SLIM_PATH", "").strip()
+    if env:
+        path = Path(env).expanduser()
+        if not path.is_absolute():
+            path = ROOT / path
+        return path if path.exists() else None
+    for path in (SLIM_LATEST_PATH, SLIM_FALLBACK_PATH):
+        if path.exists():
+            return path
+    return None
 
-    Env hooks (never invent posts if unset):
-      X_BEARER_TOKEN
-      X_BOOKMARKS_USER_ID
 
-    Skip ids already present in tracking/seen-bookmarks.json.
-    Auto-draft titleZh / planZh / suggestedSlug for hub「待投票」.
+def load_seen_ids(seen_path: Path | None = None) -> set[str]:
+    path = seen_path if seen_path is not None else SEEN_PATH
+    ids: set[str] = set()
+    if not path.exists():
+        return ids
+    try:
+        seen = load_json(path)
+    except (OSError, json.JSONDecodeError, UnicodeDecodeError, TypeError, ValueError):
+        return ids
+    items = seen.get("items") if isinstance(seen, dict) else None
+    if not isinstance(items, list):
+        return ids
+    for item in items:
+        if isinstance(item, dict) and item.get("id"):
+            ids.add(str(item["id"]).strip())
+    return ids
+
+
+def slim_item_rows(data: Any) -> list[dict[str, Any]]:
+    if isinstance(data, list):
+        return [row for row in data if isinstance(row, dict)]
+    if isinstance(data, dict):
+        items = data.get("items")
+        if isinstance(items, list):
+            return [row for row in items if isinstance(row, dict)]
+    return []
+
+
+def item_period_timestamp(item: dict[str, Any]) -> tuple[str, datetime] | None:
+    """Prefer bookmarked_at / bookmarkedAt, else created_at / createdAt."""
+    for field in ("bookmarked_at", "bookmarkedAt", "created_at", "createdAt"):
+        raw = item.get(field)
+        if raw is None:
+            continue
+        text = str(raw).strip()
+        if not text:
+            continue
+        try:
+            return field, parse_iso(text)
+        except (TypeError, ValueError, OSError):
+            continue
+    return None
+
+
+def draft_title_zh(text: str) -> str:
+    first = " ".join((text or "").strip().splitlines()[0].split()) if (text or "").strip() else ""
+    if not first:
+        return "未命名书签演示"
+    if len(first) > 42:
+        return first[:42].rstrip() + " …"
+    return first
+
+
+def draft_suggested_slug(text: str, tweet_id: str) -> str:
+    first = (text or "").strip().splitlines()[0] if text else ""
+    words = SLUG_TOKEN_RE.findall(first.lower())
+    slug = "-".join(words).strip("-")
+    if not slug:
+        return f"x-{tweet_id}"
+    if len(slug) > 40:
+        slug = slug[:40].rstrip("-")
+        if "-" in slug:
+            cut = slug.rsplit("-", 1)[0]
+            if cut:
+                slug = cut
+    return slug or f"x-{tweet_id}"
+
+
+def draft_plan_zh(author: str, text: str) -> str:
+    first = " ".join((text or "").strip().splitlines()[0].split()) if (text or "").strip() else ""
+    snippet = first[:36].rstrip() if first else "原帖"
+    handle = f"@{author}" if author else "原帖"
+    return (
+        f"把 {handle} 这条关于「{snippet}」的演示做成可点 sticky demo："
+        "保留原帖核心交互/视觉，中文说明 + 一页可玩。"
+        "技术栈待枢纽投票（燃料/harness/7×24）。"
+    )
+
+
+def candidate_from_slim_item(item: dict[str, Any]) -> dict[str, Any] | None:
+    tweet_id = str(item.get("id") or "").strip()
+    url = str(item.get("url") or "").strip()
+    if not tweet_id or not url:
+        return None
+    author = str(item.get("author") or "").strip().lstrip("@")
+    text = str(item.get("text") or item.get("title") or "").strip()
+    return {
+        "id": tweet_id,
+        "url": url,
+        "titleZh": draft_title_zh(text),
+        "author": author,
+        "planZh": draft_plan_zh(author, text),
+        "suggestedSlug": draft_suggested_slug(text, tweet_id),
+        "status": "open",
+    }
+
+
+def ingest_note_zh(candidate_count: int, *, slim_found: bool) -> str:
+    if candidate_count > 0:
+        return (
+            f"已摄入 {candidate_count} 条本窗书签增量（Firstmate X MCP slim），作为待投票。"
+            "仍可投燃料 / harness / 7×24。"
+        )
+    if not slim_found:
+        return (
+            "本窗无新书签增量：未找到 Firstmate X MCP slim JSON"
+            "（X_BOOKMARKS_SLIM_PATH 或 tracking/inbox/x-bookmarks-slim-latest.json）。"
+            "Worker Cron 不抓 X。官方自建 X App / X_BEARER_TOKEN 非主线（船长 2026-09-16）。"
+            "仍可投燃料 / harness / 7×24。"
+        )
+    return (
+        "本窗无新书签增量：Firstmate X MCP slim 已读，本窗无未见过的书签 id。"
+        "Worker Cron 不抓 X。绝不伪造书签。仍可投燃料 / harness / 7×24。"
+    )
+
+
+def ingest_x_bookmark_increments(
+    period_start: datetime,
+    period_end: datetime,
+    *,
+    slim_path: Path | str | None = None,
+    seen_path: Path | None = None,
+) -> list[dict[str, Any]]:
+    """Read Firstmate-side X MCP slim JSON; never invent tweet ids/urls.
+
+    Path: env X_BOOKMARKS_SLIM_PATH, else tracking/inbox/x-bookmarks-slim-latest.json,
+    else tracking/inbox/x-bookmarks-slim.json. Official X App / X_BEARER_TOKEN is
+    not mainline (captain order 2026-09-16). Missing file → candidates=[].
+
+    Period filter is [period_start, period_end) on bookmarked_at/bookmarkedAt,
+    else created_at. Skip tracking/seen-bookmarks.json ids.
     """
-    token = os.environ.get("X_BEARER_TOKEN", "").strip()
-    user_id = os.environ.get("X_BOOKMARKS_USER_ID", "").strip()
-    if not token or not user_id:
+    path = resolve_slim_path(slim_path)
+    if path is None:
         print(
-            "X ingest: skipped (missing X_BEARER_TOKEN / X_BOOKMARKS_USER_ID); candidates=[]",
+            "X ingest: skipped (no Firstmate X MCP slim JSON at "
+            "X_BOOKMARKS_SLIM_PATH / tracking/inbox/x-bookmarks-slim-latest.json / "
+            "tracking/inbox/x-bookmarks-slim.json); candidates=[]",
             file=sys.stderr,
         )
         return []
-    seen_ids = set()
-    if SEEN_PATH.exists():
-        seen = load_json(SEEN_PATH)
-        for item in seen.get("items") or []:
-            if item and item.get("id"):
-                seen_ids.add(str(item["id"]))
+
+    try:
+        data = load_json(path)
+    except (OSError, json.JSONDecodeError, UnicodeDecodeError, TypeError, ValueError) as exc:
+        print(f"X ingest: failed to parse {path}: {exc}; candidates=[]", file=sys.stderr)
+        return []
+
+    start = period_start.astimezone(timezone.utc)
+    end = period_end.astimezone(timezone.utc)
+    seen_ids = load_seen_ids(seen_path)
+    skipped_seen = 0
+    skipped_window = 0
+    skipped_bad = 0
+    candidates: list[dict[str, Any]] = []
+    used_ids: set[str] = set()
+
+    for item in slim_item_rows(data):
+        stamp = item_period_timestamp(item)
+        if stamp is None:
+            skipped_bad += 1
+            continue
+        _field, when = stamp
+        if when < start or when >= end:
+            skipped_window += 1
+            continue
+        tweet_id = str(item.get("id") or "").strip()
+        if tweet_id and tweet_id in seen_ids:
+            skipped_seen += 1
+            continue
+        if tweet_id and tweet_id in used_ids:
+            skipped_seen += 1
+            continue
+        row = candidate_from_slim_item(item)
+        if row is None:
+            skipped_bad += 1
+            continue
+        used_ids.add(row["id"])
+        candidates.append(row)
+
     print(
-        "X ingest: TODO not implemented; refusing to fake bookmarks; candidates=[] "
-        f"(period {iso_z(period_start)} .. {iso_z(period_end)}; seen={len(seen_ids)})",
+        f"X ingest: {path} period {iso_z(start)} .. {iso_z(end)}; "
+        f"new={len(candidates)} skipped_seen={skipped_seen} "
+        f"skipped_out_of_window={skipped_window} skipped_bad={skipped_bad}",
         file=sys.stderr,
     )
-    return []
+    return candidates
+
+
+def run_ingest_only(*, dry_run: bool) -> int:
+    """Refresh current ballot-window.json candidates from slim JSON; do not settle."""
+    ballot = load_json(BALLOT_PATH)
+    opens = parse_iso(str(ballot["opensAt"]))
+    closes = parse_iso(str(ballot["closesAt"]))
+    slim = resolve_slim_path()
+    if slim is None:
+        print(
+            "ingest-only: slim JSON missing; leaving tracking/ballot-window.json candidates unchanged",
+            file=sys.stderr,
+        )
+        return 0
+    candidates = ingest_x_bookmark_increments(opens, closes)
+    note = ingest_note_zh(len(candidates), slim_found=True)
+    summary = {
+        "action": "ingest_only",
+        "windowId": ballot.get("windowId"),
+        "opensAt": ballot.get("opensAt"),
+        "closesAt": ballot.get("closesAt"),
+        "slimPath": str(slim),
+        "candidateCount": len(candidates),
+        "candidateIds": [c.get("id") for c in candidates],
+    }
+    print(json.dumps(summary, ensure_ascii=False, indent=2))
+    if dry_run:
+        print("dry-run: would update tracking/ballot-window.json candidates + ingestNoteZh")
+        return 0
+    ballot["candidates"] = candidates
+    ballot["ingestNoteZh"] = note
+    dump_json(BALLOT_PATH, ballot)
+    return 0
 
 
 def settle(ballot: dict, arsenal: dict, cfg: dict) -> dict[str, Any]:
@@ -621,8 +834,117 @@ def self_test() -> int:
     )
     assert maybe_commit_push("x", no_git=True, no_push=False, dry_run=False) == "no_git"
     assert maybe_commit_push("x", no_git=False, no_push=False, dry_run=True) == "dry_run"
+    self_test_ingest()
     print("self-test ok")
     return 0
+
+
+def self_test_ingest() -> None:
+    """Temp slim fixture: 1 in-window + 1 out-of-window + 1 seen → only the unknown in-window."""
+    start = parse_iso("2026-09-16T00:00:00.000Z")
+    end = parse_iso("2026-09-16T08:00:00.000Z")
+    in_id = "1999000000000000001"
+    out_id = "1999000000000000002"
+    seen_id = "1999000000000000003"
+    payload = {
+        "source": "self-test fixture",
+        "items": [
+            {
+                "id": in_id,
+                "url": f"https://x.com/alice/status/{in_id}",
+                "created_at": "2026-09-16T03:00:00.000Z",
+                "author": "alice",
+                "text": "Realtime canvas particles for a tiny playable demo",
+            },
+            {
+                "id": out_id,
+                "url": f"https://x.com/bob/status/{out_id}",
+                "created_at": "2026-09-15T12:00:00.000Z",
+                "author": "bob",
+                "text": "Yesterday's post should be excluded",
+            },
+            {
+                "id": seen_id,
+                "url": f"https://x.com/carol/status/{seen_id}",
+                "bookmarked_at": "2026-09-16T04:00:00.000Z",
+                "created_at": "2026-09-16T04:00:00.000Z",
+                "author": "carol",
+                "text": "Already processed bookmark",
+            },
+        ],
+    }
+    previous_env = os.environ.get("X_BOOKMARKS_SLIM_PATH")
+    with tempfile.TemporaryDirectory() as tmp:
+        tmp_path = Path(tmp)
+        slim = tmp_path / "slim.json"
+        seen = tmp_path / "seen.json"
+        dump_json(slim, payload)
+        dump_json(seen, {"version": 1, "items": [{"id": seen_id}]})
+
+        missing = ingest_x_bookmark_increments(
+            start, end, slim_path=tmp_path / "missing.json", seen_path=seen
+        )
+        assert missing == []
+
+        got = ingest_x_bookmark_increments(start, end, slim_path=slim, seen_path=seen)
+        assert [row["id"] for row in got] == [in_id], [row["id"] for row in got]
+        row = got[0]
+        assert row["url"] == f"https://x.com/alice/status/{in_id}"
+        assert row["author"] == "alice"
+        assert row["status"] == "open"
+        assert set(row) == {"id", "url", "titleZh", "author", "planZh", "suggestedSlug", "status"}
+        assert in_id in row["suggestedSlug"] or row["suggestedSlug"].startswith("realtime-canvas")
+        assert "alice" in row["planZh"]
+        assert "伪造" not in row["titleZh"]
+
+        os.environ["X_BOOKMARKS_SLIM_PATH"] = str(slim)
+        try:
+            via_env = ingest_x_bookmark_increments(start, end, seen_path=seen)
+            assert [row["id"] for row in via_env] == [in_id]
+        finally:
+            if previous_env is None:
+                os.environ.pop("X_BOOKMARKS_SLIM_PATH", None)
+            else:
+                os.environ["X_BOOKMARKS_SLIM_PATH"] = previous_env
+
+        # Prefer bookmarked_at over created_at: in-window created_at must not override out-of-window bookmark time.
+        prefer = tmp_path / "prefer.json"
+        dump_json(
+            prefer,
+            {
+                "items": [
+                    {
+                        "id": "1999000000000000004",
+                        "url": "https://x.com/dave/status/1999000000000000004",
+                        "bookmarked_at": "2026-09-15T20:00:00.000Z",
+                        "created_at": "2026-09-16T03:00:00.000Z",
+                        "author": "dave",
+                        "text": "created in window but bookmarked earlier",
+                    }
+                ]
+            },
+        )
+        assert ingest_x_bookmark_increments(start, end, slim_path=prefer, seen_path=seen) == []
+
+        camel = tmp_path / "camel.json"
+        dump_json(
+            camel,
+            {
+                "items": [
+                    {
+                        "id": "1999000000000000005",
+                        "url": "https://x.com/erin/status/1999000000000000005",
+                        "bookmarkedAt": "2026-09-16T01:00:00.000Z",
+                        "created_at": "2026-09-15T01:00:00.000Z",
+                        "author": "erin",
+                        "text": "书签时间在窗内，发帖时间在窗外",
+                    }
+                ]
+            },
+        )
+        camel_got = ingest_x_bookmark_increments(start, end, slim_path=camel, seen_path=seen)
+        assert [row["id"] for row in camel_got] == ["1999000000000000005"]
+        assert camel_got[0]["titleZh"] == "书签时间在窗内，发帖时间在窗外"
 
 
 def main() -> int:
@@ -632,9 +954,16 @@ def main() -> int:
     parser.add_argument("--no-push", action="store_true")
     parser.add_argument("--force", action="store_true", help="Settle even if the current window is still open.")
     parser.add_argument("--self-test", action="store_true")
+    parser.add_argument(
+        "--ingest-only",
+        action="store_true",
+        help="Refresh current ballot-window.json candidates from Firstmate X MCP slim JSON; do not settle.",
+    )
     args = parser.parse_args()
     if args.self_test:
         return self_test()
+    if args.ingest_only:
+        return run_ingest_only(dry_run=args.dry_run)
 
     cfg = load_json(CONFIG_PATH)
     arsenal = load_json(ARSENAL_PATH)
@@ -704,11 +1033,7 @@ def main() -> int:
         "closesAt": iso_z(want_end),
         "candidates": candidates,
         "options": options,
-        "ingestNoteZh": (
-            "本窗无新书签增量：尚未配置 X 凭证或 ingest 未实现，cron 不会伪造书签。仍可投燃料 / harness / 7×24。"
-            if not candidates
-            else f"已摄入 {len(candidates)} 条刚结束时段的书签增量，作为本窗待投票。"
-        ),
+        "ingestNoteZh": ingest_note_zh(len(candidates), slim_found=resolve_slim_path() is not None),
     }
 
     print(
