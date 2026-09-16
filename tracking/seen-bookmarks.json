@@ -2,6 +2,23 @@
   "version": 1,
   "items": [
     {
+      "id": "2099808769043841452",
+      "url": "https://x.com/gkxspace/status/2099808769043841452",
+      "slug": "hypit-video-harness",
+      "title": "Hypit — open-source video language and compiler for coding agents",
+      "titleZh": "Hypit 视频语言与编译系统",
+      "hubTitle": "Hypit 视频 Harness",
+      "blurbZh": "脚本编译成时间线，告别手搓剪映 / 抽卡黑盒。",
+      "rationaleZh": "原帖把 Hypit 说成 Coding Agent 的视频 harness，适合钉成一条可点的脚本→编译→时间线流水线。",
+      "author": "gkxspace",
+      "processedAt": "2026-09-16T07:40:00.000Z",
+      "path": "/apps/hypit-video-harness/",
+      "subscriptionZh": "Cursor Ultra",
+      "modelZh": "grok-4.6",
+      "harnessZh": "Cursor Cloud Agent",
+      "environmentZh": "Cursor Cloud Agent 托管机"
+    },
+    {
       "id": "2099756605491253477",
       "url": "https://x.com/Ryrenz/status/2099756605491253477",
       "slug": "go-modern-guidelines",

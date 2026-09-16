@@ -1,0 +1,197 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta name="theme-color" content="#07090f" />
+  <title>Hypit 视频 Harness — bookmark-demo-lab</title>
+  <meta name="description" content="静态玩具板：把 Hypit 说成 Coding Agent 的视频语言与编译系统，钉成一条可点的脚本→编译→时间线→导出流水线。无真实编码。" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=Noto+Sans+SC:wght@400;500;700;900&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <a class="skip" href="#board">跳到玩具板</a>
+
+  <header class="nav">
+    <a class="hub" href="../../">← 实验室</a>
+    <p class="brand">
+      <span class="mark" aria-hidden="true"></span>
+      Hypit 视频 Harness
+    </p>
+    <a class="source" href="https://x.com/gkxspace/status/2099808769043841452" target="_blank" rel="noopener noreferrer">原帖 @gkxspace</a>
+  </header>
+
+  <main>
+    <section class="hero">
+      <p class="kicker">静态致敬 · 视频领域的开源 Harness</p>
+      <h1>脚本进，时间线出</h1>
+      <p class="lede">
+        原帖把 Hypit 说成给 Claude Code / Codex 用的<strong>视频语言与编译系统</strong>：
+        词锚定画面，而不是人手去对时间码。改一个字不必整条重抽。
+        这块板子只模拟四站流水线，<strong>不做真实编码</strong>。
+      </p>
+      <div class="hero-row">
+        <div class="install">
+          <code>npx skills add <b>hypit-ai/hypit</b> -g</code>
+          <button class="btn quiet" type="button" data-copy="npx skills add hypit-ai/hypit -g">复制</button>
+        </div>
+        <div class="hero-actions">
+          <button class="btn primary" type="button" data-run>运行流水线</button>
+          <a class="btn quiet" href="https://github.com/hypit-ai/hypit" target="_blank" rel="noopener noreferrer">打开仓库</a>
+        </div>
+      </div>
+      <blockquote>
+        <p>专门给 Coding Agent 打造的开源视频语言与编译系统。告别手搓剪映，也告别抽卡黑盒。</p>
+        <cite>@gkxspace · 余温</cite>
+      </blockquote>
+    </section>
+
+    <ol class="rail" id="board" aria-label="四站流水线">
+      <li>
+        <button type="button" class="stage is-on" data-stage="script" aria-pressed="true">
+          <span class="idx">01</span>
+          <b>提示 / 脚本</b>
+          <span>Agent 写词，不拖图层</span>
+        </button>
+      </li>
+      <li>
+        <button type="button" class="stage" data-stage="compile" aria-pressed="false">
+          <span class="idx">02</span>
+          <b>编译</b>
+          <span>词 → 中间表示</span>
+        </button>
+      </li>
+      <li>
+        <button type="button" class="stage" data-stage="timeline" aria-pressed="false">
+          <span class="idx">03</span>
+          <b>时间线 / 片段</b>
+          <span>A-roll · B-roll · 字幕</span>
+        </button>
+      </li>
+      <li>
+        <button type="button" class="stage" data-stage="export" aria-pressed="false">
+          <span class="idx">04</span>
+          <b>导出</b>
+          <span>模拟成片，跳过编码</span>
+        </button>
+      </li>
+    </ol>
+
+    <section class="bench" aria-label="可点玩具板">
+      <div class="pane script-pane" data-pane="script">
+        <header>
+          <span class="badge">PROMPT · SVML 玩具方言</span>
+          <h2>提示台</h2>
+        </header>
+        <p class="hint">点一条样例，或改几行再编译。这是演示用的词锚定脚本，不是官方 Studio。</p>
+        <div class="presets" role="group" aria-label="样例提示">
+          <button type="button" class="chip is-on" data-preset="rank">榜单短片</button>
+          <button type="button" class="chip" data-preset="cast">播客切片</button>
+          <button type="button" class="chip" data-preset="street">街头采访</button>
+        </div>
+        <label class="sr-only" for="prompt">Agent 提示</label>
+        <input id="prompt" type="text" spellcheck="false" autocomplete="off" />
+        <label class="sr-only" for="source">脚本源</label>
+        <textarea id="source" spellcheck="false" rows="12"></textarea>
+        <div class="pane-actions">
+          <button class="btn primary" type="button" data-compile>编译这条脚本</button>
+          <p class="status" data-script-status>尚未编译。</p>
+        </div>
+      </div>
+
+      <div class="pane compile-pane" data-pane="compile">
+        <header>
+          <span class="badge">IR · 词锚定</span>
+          <h2>编译器</h2>
+        </header>
+        <p class="hint">传统剪辑软件让 Agent 去对时间码；这里把画面绑在词上。改一句，只重编受影响的片段。</p>
+        <pre class="ir" id="ir" aria-live="polite"><code>等待脚本进站…</code></pre>
+        <ul class="log" id="log" aria-label="编译日志"></ul>
+      </div>
+
+      <div class="pane monitor-pane" data-pane="timeline">
+        <header>
+          <span class="badge">MONITOR · 9:16</span>
+          <h2>监视器</h2>
+        </header>
+        <div class="phone" aria-hidden="true">
+          <div class="screen" id="screen">
+            <canvas id="frame" width="270" height="480"></canvas>
+            <p class="cap" id="cap">未挂载时间线</p>
+            <p class="word" id="word">· · ·</p>
+          </div>
+        </div>
+        <div class="transport">
+          <button class="btn quiet" type="button" data-play aria-pressed="false">播放</button>
+          <label class="sr-only" for="scrub">播放头</label>
+          <input id="scrub" type="range" min="0" max="180" value="0" />
+          <span class="clock" id="clock">0.0s</span>
+        </div>
+      </div>
+    </section>
+
+    <section class="timeline" data-pane="timeline" aria-label="时间线">
+      <div class="tl-bar">
+        <h2>时间线</h2>
+        <p data-tl-meta>还没有片段。先编译脚本。</p>
+      </div>
+      <div class="ruler" id="ruler"></div>
+      <div class="tracks" id="tracks"></div>
+    </section>
+
+    <section class="export" data-pane="export" aria-label="导出">
+      <div class="export-copy">
+        <span class="badge">EXPORT · SIMULATED</span>
+        <h2>导出站</h2>
+        <p>真正的 Hypit 会走无头 Chromium 渲帧再交给 ffmpeg。这块板子只开收据：无密钥、无接口、不写 MP4。</p>
+        <button class="btn primary" type="button" data-export>模拟导出</button>
+        <div class="progress" hidden>
+          <div class="bar" id="bar"></div>
+        </div>
+      </div>
+      <article class="receipt" id="receipt" hidden>
+        <p class="receipt-kicker">成片收据</p>
+        <h3 id="receipt-file">hypit-demo.mp4</h3>
+        <dl>
+          <div><dt>时长</dt><dd data-r-dur>—</dd></div>
+          <div><dt>片段</dt><dd data-r-clips>—</dd></div>
+          <div><dt>词锚点</dt><dd data-r-words>—</dd></div>
+          <div><dt>编码</dt><dd>跳过 · 玩具板</dd></div>
+        </dl>
+        <p class="hash" data-r-hash></p>
+      </article>
+    </section>
+
+    <section class="why">
+      <h2>原帖点名的两件头疼事</h2>
+      <div class="why-grid">
+        <article>
+          <p class="idx">抽卡黑盒</p>
+          <h3>改一个字，整条重抽</h3>
+          <p>视频模型只吐一段写死的 MP4。Harness 把工作流落成可编译脚本，只重生变化的那一层。</p>
+        </article>
+        <article>
+          <p class="idx">手搓剪映</p>
+          <h3>时间码不是给 Agent 用的</h3>
+          <p>人手拖图层没问题；让 Coding Agent 去对帧号就卡住。词锚定的语言才能当编译目标。</p>
+        </article>
+        <article>
+          <p class="idx">一条工作流</p>
+          <h3>同一结构，换角色再出</h3>
+          <p>榜单、播客、街头采访都能当模板：换主持、换产品、换语言，结构留下。</p>
+        </article>
+      </div>
+    </section>
+  </main>
+
+  <footer class="foot">
+    <a href="../../">← 返回书签演示实验室</a>
+    <a href="https://x.com/gkxspace/status/2099808769043841452" target="_blank" rel="noopener noreferrer">来源收藏 · gkxspace</a>
+    <span>apps/hypit-video-harness · 静态玩具板，非官方 Studio</span>
+  </footer>
+
+  <script src="app.js"></script>
+</body>
+</html>
