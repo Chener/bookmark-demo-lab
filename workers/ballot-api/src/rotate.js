@@ -360,7 +360,11 @@ async function putJson(kv, key, value, ttl) {
 export async function persistWindow(kv, ballot) {
   const snapshot = windowSnapshot(ballot);
   await putJson(kv, "current-window", snapshot, LEDGER_TTL_S);
-  await putJson(kv, "window-meta:" + snapshot.windowId, snapshot, LEDGER_TTL_S);
+  try {
+    await putJson(kv, "window-meta:" + snapshot.windowId, snapshot, LEDGER_TTL_S);
+  } catch (_) {
+    /* current-window is source of truth for GET /api/window */
+  }
   return snapshot;
 }
 
@@ -425,16 +429,38 @@ export async function runRotate(env, opts) {
   };
 
   const writeCommittedStatus = async function (status) {
+    const payload = Object.assign({}, status, {
+      ok: true,
+      needsGitPush: true,
+      needsXIngest: true
+    });
     try {
-      await writeStatus(status, false);
-      return status;
+      await writeStatus(payload, false);
+      return payload;
     } catch (_) {
       try {
-        await writeStatus(status, false);
+        await writeStatus(payload, false);
+        return payload;
       } catch (__) {
-        /* never fail() after durable window/ledger writes */
+        try {
+          const prior = await kv.get("rotate-status", "json");
+          const patched = Object.assign({}, prior || {}, {
+            ok: true,
+            action: payload.action,
+            needsGitPush: true,
+            needsXIngest: true,
+            settledWindowId: payload.settledWindowId,
+            nextWindowId: payload.nextWindowId
+          });
+          if (/未改窗/.test(String(patched.noteZh || ""))) {
+            patched.noteZh = payload.noteZh || "";
+          }
+          await writeStatus(patched, false);
+        } catch (___) {
+          /* return in-memory flags-true status; never write 未改窗 */
+        }
+        return payload;
       }
-      return status;
     }
   };
 
@@ -455,6 +481,7 @@ export async function runRotate(env, opts) {
 
   let heldLock = false;
   let committed = null;
+  let durablyMutated = false;
   try {
     try {
       if (!options.skipLock) {
@@ -494,7 +521,6 @@ export async function runRotate(env, opts) {
 
       if (!current || !current.windowId) {
         const boot = bootstrapBallot(nowMs, cfg, stackOptions);
-        await persistWindow(kv, boot);
         committed = {
           version: 1,
           at: started,
@@ -509,6 +535,8 @@ export async function runRotate(env, opts) {
           needsXIngest: true,
           noteZh: "KV 无窗快照，已按 rotate-config 打开当前上海窗。请 harness 把 ballot-window 同步进 git；Worker 未抓 X。"
         };
+        durablyMutated = true;
+        await persistWindow(kv, boot);
       } else {
         const closesMs = parseIso(current.closesAt);
         const opensMs = parseIso(current.opensAt);
@@ -543,8 +571,6 @@ export async function runRotate(env, opts) {
         }, nowMs);
 
         const next = nextBallotSnapshot(nowMs, closesMs, current, cfg, stackOptions);
-        await putJson(kv, "vote-ledger", settled.ledger, LEDGER_TTL_S);
-        await persistWindow(kv, next);
         committed = {
           version: 1,
           at: started,
@@ -561,11 +587,25 @@ export async function runRotate(env, opts) {
           noteZh:
             "Worker Cron 已在 KV 结算上一窗并打开下一窗。未跑 git / X / agy。harness 见 needsGitPush / needsXIngest；完成后 POST /api/rotate-status/ack。"
         };
+        durablyMutated = true;
+        await putJson(kv, "vote-ledger", settled.ledger, LEDGER_TTL_S);
+        await persistWindow(kv, next);
       }
     } catch (_) {
-      if (!committed) {
-        return await fail("rotate_failed");
+      if (durablyMutated) {
+        const status = committed || {
+          version: 1,
+          at: started,
+          cron: cron,
+          scheduledTime: isoZ(Number(options.scheduledTime) || nowMs),
+          ok: true,
+          action: "rotated",
+          needsGitPush: true,
+          needsXIngest: true
+        };
+        return await writeCommittedStatus(status);
       }
+      return await fail("rotate_failed");
     }
 
     if (committed) {
