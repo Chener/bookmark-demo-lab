@@ -100,6 +100,43 @@ def vote_window_minutes(cfg: dict) -> int:
     return period_hours(cfg or {}) * 60
 
 
+STAMP_SLACK_MINUTES = 1
+
+
+def span_minutes(opens: datetime, closes: datetime) -> int | None:
+    try:
+        sec = (closes - opens).total_seconds()
+    except (TypeError, ValueError, OSError):
+        return None
+    if sec <= 0:
+        return None
+    return max(1, int(round(sec / 60)))
+
+
+def should_stamp_vote_window_minutes(
+    opens: datetime,
+    closes: datetime,
+    cfg: dict,
+    slack: int = STAMP_SLACK_MINUTES,
+) -> bool:
+    """True only when opens→closes already matches config minutes (±slack).
+
+    Do not stamp voteWindowMinutes:10 onto a leftover 8h window (same windowId PUT).
+    """
+    cfg_m = vote_window_minutes(cfg)
+    span = span_minutes(opens, closes)
+    if span is None:
+        return False
+    return abs(span - cfg_m) <= slack
+
+
+def apply_vote_window_minutes_stamp(ballot: dict, cfg: dict, *, opens: datetime, closes: datetime) -> None:
+    if should_stamp_vote_window_minutes(opens, closes, cfg):
+        ballot["voteWindowMinutes"] = vote_window_minutes(cfg)
+    else:
+        ballot.pop("voteWindowMinutes", None)
+
+
 def tzinfo(cfg: dict) -> ZoneInfo:
     return ZoneInfo(str(cfg.get("timezone") or "Asia/Shanghai"))
 
@@ -809,8 +846,10 @@ def run_ingest_only(*, dry_run: bool, replace_candidates: bool) -> int:
         has_more=result.has_more,
         merged=not replace_candidates,
     )
-    if cfg.get("voteWindowMinutes") is not None and str(cfg.get("voteWindowMinutes")).strip() != "":
+    if should_stamp_vote_window_minutes(opens, closes, cfg):
         ballot["voteWindowMinutes"] = vote_window_minutes(cfg)
+    else:
+        ballot.pop("voteWindowMinutes", None)
     base = vote_api_base(cfg)
     remote_window = fetch_worker_window(base)
     put_ok, put_reason = may_put_local_window(ballot, remote_window)
@@ -1067,8 +1106,33 @@ def self_test() -> int:
     assert vote_window_minutes({"voteWindowMinutes": "", "periodHours": 2}) == 2 * 60
     assert vote_window_minutes({"voteWindowMinutes": -3, "periodHours": 8}) == 8 * 60
     assert vote_window_minutes({"voteWindowMinutes": 10}) == 10
-
     cfg10 = {**cfg, "voteWindowMinutes": 10}
+    opens8 = parse_iso("2026-09-16T00:00:00.000Z")
+    closes8 = parse_iso("2026-09-16T08:00:00.000Z")
+    assert should_stamp_vote_window_minutes(opens8, closes8, cfg10) is False
+    stale = {
+        "windowId": "2026-09-16-08",
+        "opensAt": "2026-09-16T00:00:00.000Z",
+        "closesAt": "2026-09-16T08:00:00.000Z",
+        "voteWindowMinutes": 10,
+    }
+    apply_vote_window_minutes_stamp(stale, cfg10, opens=opens8, closes=closes8)
+    assert "voteWindowMinutes" not in stale
+    opens10 = parse_iso("2026-09-16T00:00:00.000Z")
+    closes10 = parse_iso("2026-09-16T00:10:00.000Z")
+    assert should_stamp_vote_window_minutes(opens10, closes10, cfg10) is True
+    fresh = {
+        "windowId": "2026-09-16-0800",
+        "opensAt": "2026-09-16T00:00:00.000Z",
+        "closesAt": "2026-09-16T00:10:00.000Z",
+    }
+    apply_vote_window_minutes_stamp(fresh, cfg10, opens=opens10, closes=closes10)
+    assert fresh["voteWindowMinutes"] == 10
+    closes11 = parse_iso("2026-09-16T00:11:00.000Z")
+    assert should_stamp_vote_window_minutes(opens10, closes11, cfg10) is True
+    closes12 = parse_iso("2026-09-16T00:12:00.000Z")
+    assert should_stamp_vote_window_minutes(opens10, closes12, cfg10) is False
+
     now10 = parse_iso("2026-09-16T00:03:00.000Z")  # 08:03 Shanghai
     s10, e10 = containing_window(now10, cfg10)
     assert iso_z(s10) == "2026-09-16T00:00:00.000Z"
@@ -1369,7 +1433,6 @@ def main() -> int:
         "windowId": window_id_for(want_start, cfg),
         "timezone": cfg.get("timezone") or "Asia/Shanghai",
         "periodHours": period_hours(cfg),
-        "voteWindowMinutes": vote_window_minutes(cfg),
         "opensAt": iso_z(want_start),
         "closesAt": iso_z(want_end),
         "candidates": candidates,
@@ -1381,6 +1444,7 @@ def main() -> int:
             merged=not args.replace_candidates,
         ),
     }
+    apply_vote_window_minutes_stamp(next_ballot, cfg, opens=want_start, closes=want_end)
 
     print(
         json.dumps(
