@@ -1,9 +1,9 @@
 {
   "version": 1,
-  "lastSettleAt": null,
-  "settledWindowId": null,
+  "lastSettleAt": "2026-09-18T07:10:36.000Z",
+  "settledWindowId": "2026-09-18-1500",
   "voteCount": 0,
-  "tallySource": null,
+  "tallySource": "kv",
   "tallies": {
     "fuel": {},
     "harness": {},
@@ -17,5 +17,5 @@
     "autoPick": true
   },
   "winningCandidateId": null,
-  "noteZh": "尚未结算。Cloudflare Workers Cron 在窗关闭时读 KV 计票并写入账本；零票则 autoPick=true。"
+  "noteZh": "零票，autoPick=true，编排器可从军火库启用项自选。"
 }
