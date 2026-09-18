@@ -4,15 +4,18 @@
  * field is missing, duration is periodHours (cold/legacy, default 8h).
  * Windows are floor-aligned in timezone by that duration. No git, X, agy, or demo builds.
  *
- * KV write budget (Cron path; Free tier ~1000 writes/day):
- *   before_writes_est: ~1641/day (observed every-minute cron: lock/status on skipped_open ticks)
- *   after_writes_est: ~0 avoidable on skipped_open (every-5-min poll; single open-window skip
- *     before claimLock; no optimistic rotate-status). Settle path refreshes rotate-config/arsenal
- *     and writes window-meta (~1/rotate) — roughly ~8–9 KV writes x rotates/day (~1300/day at 10m
- *     windows; Free-plan tight). Captain: no near-close gate; no cache-if-unchanged.
+ * KV write budget (Cron path; Free tier ~1000 writes/day; target ≤800 with headroom):
+ *   before_writes_est: ~1300/day at main tip after PR#24 (cron every 5 min; ~8–9 puts × 144 rotates/day
+ *     at 10m windows: lock + rotate-config + arsenal + current-window + window-meta +
+ *     pending-ledger + vote-ledger + rotate-status; skipped_open = 0 writes).
+ *   after_writes_est: ~720/day = 0 on skipped_open + ~5 puts × 144 rotates/day
+ *     (lock + current-window + pending-ledger + vote-ledger + rotate-status).
+ *     Cron omits window-meta (late votes on old windowId → unknown_window, not window_closed).
+ *     Settle fetches rotate-config/arsenal but does not put them (no cache-if-unchanged).
+ *     Cron every-10-min aligns with 10m windows. Deletes are a separate Free quota.
  */
 
-export const CRON_UTC = "*/5 * * * *";
+export const CRON_UTC = "*/10 * * * *";
 export const CONFIG_TTL_S = 60 * 60 * 24 * 7;
 export const LEDGER_TTL_S = 60 * 60 * 24 * 14;
 export const STATUS_TTL_S = 60 * 60 * 24 * 14;
@@ -328,15 +331,10 @@ export async function fetchFirstJson(urls, fetchImpl) {
 }
 
 export async function loadRotateConfig(env, fetchImpl) {
+  // Fetch-only on Cron settle: do not put rotate-config (saves 1 write/rotate).
+  // KV cache remains a read fallback when origin/raw fetch fails.
   const fetched = await fetchFirstJson(trackingUrls(env, "rotate-config.json"), fetchImpl);
   if (fetched && (fetched.voteWindowMinutes || fetched.periodHours || fetched.slotHours)) {
-    try {
-      await env.BALLOT_KV.put("rotate-config", JSON.stringify(fetched), {
-        expirationTtl: kvTtl(CONFIG_TTL_S)
-      });
-    } catch (_) {
-      /* cache is best-effort */
-    }
     return fetched;
   }
   const cached = await env.BALLOT_KV.get("rotate-config", "json");
@@ -369,13 +367,19 @@ async function putJson(kv, key, value, ttl) {
   await kv.put(key, JSON.stringify(value), { expirationTtl: kvTtl(ttl) });
 }
 
-export async function persistWindow(kv, ballot) {
+export async function persistWindow(kv, ballot, options) {
+  const opts = options || {};
   const snapshot = windowSnapshot(ballot);
   await putJson(kv, "current-window", snapshot, LEDGER_TTL_S);
-  try {
-    await putJson(kv, "window-meta:" + snapshot.windowId, snapshot, LEDGER_TTL_S);
-  } catch (_) {
-    /* current-window is source of truth for GET /api/window */
+  // Cron settle/open omits window-meta (default) to save 1 write/rotate.
+  // Tradeoff: POST /api/vote for a non-current windowId returns unknown_window
+  // instead of window_closed. Admin PUT /api/window passes persistMeta: true.
+  if (opts.persistMeta === true) {
+    try {
+      await putJson(kv, "window-meta:" + snapshot.windowId, snapshot, LEDGER_TTL_S);
+    } catch (_) {
+      /* current-window is source of truth for GET /api/window */
+    }
   }
   return snapshot;
 }
@@ -587,12 +591,11 @@ export async function runRotate(env, opts) {
       };
 
       const loadCachedArsenal = async function () {
+        // Fetch-only: do not put arsenal on settle (saves 1 write/rotate).
+        // Existing KV arsenal remains a read fallback if fetch throws.
         let arsenal = null;
         try {
           arsenal = await loadArsenal(env, fetchImpl);
-          if (arsenal) {
-            await putJson(kv, "arsenal", arsenal, CONFIG_TTL_S);
-          }
         } catch (_) {
           arsenal = await kv.get("arsenal", "json");
         }
