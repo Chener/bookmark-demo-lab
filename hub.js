@@ -1010,7 +1010,7 @@
 
         const chip = document.createElement("span");
         chip.className = "status-chip " + (isPlanned ? "chip-planned" : "chip-active");
-        chip.textContent = isPlanned ? "规划" : (it.bandZh || "启用");
+        chip.textContent = isPlanned ? "规划" : "启用";
 
         row.append(name, chip);
         li.append(row);
