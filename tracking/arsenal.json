@@ -1,100 +1,151 @@
 {
   "version": 1,
-  "updatedAt": "2026-09-15T08:52:00.000Z",
+  "updatedAt": "2026-09-18T07:32:00.000Z",
+  "overviewZh": "三层弹药：燃料 → 载体 → 7×24。枢纽只做总览与标签。",
+  "quotaBoardZh": "CodexBar",
+  "quotaNoteZh": "额度与配额明细由 CodexBar 展示；本页不报剩余百分比或倒计时。",
   "sections": [
     {
       "id": "fuel",
-      "titleZh": "燃料 (Fuel)",
-      "blurbZh": "高性价比 ≤~$20 或前沿免费主力模型方案",
+      "titleZh": "燃料",
+      "kickerZh": "≤$20 · 前沿免费",
+      "blurbZh": "高性价比（≤~$20）或前沿免费主力。不报单价。",
       "items": [
         {
           "nameZh": "Cursor Ultra",
           "status": "active",
-          "noteZh": "启用 · 主力编程与 Cloud Agent 额度"
+          "kind": "subscription",
+          "bandZh": "高性价比",
+          "noteZh": "主力编程与 Cloud Agent。额度见 CodexBar。",
+          "tags": ["主力", "Cloud Agent", "高性价比"]
         },
         {
           "nameZh": "Google AI Pro · Antigravity / alphatradebot",
           "status": "active",
-          "noteZh": "启用 · agy 已用，前沿长上下文与推理"
+          "kind": "subscription",
+          "bandZh": "高性价比",
+          "noteZh": "agy 已用：前沿长上下文与推理。额度见 CodexBar。",
+          "tags": ["agy", "长上下文", "高性价比"]
         },
         {
           "nameZh": "OpenRouter 前沿免费",
           "status": "active",
-          "noteZh": "启用 · 零边际成本前沿免费模型路由"
+          "kind": "free-frontier",
+          "bandZh": "前沿免费",
+          "noteZh": "零边际成本前沿免费模型路由。适用处优先走免费档。",
+          "tags": ["前沿免费", "OpenRouter"]
         },
         {
           "nameZh": "OpenCode",
           "status": "planned",
-          "noteZh": "规划中 · 开源终端代码 Agent"
+          "kind": "planned",
+          "bandZh": "规划",
+          "noteZh": "开源终端代码 Agent。规划中，不可投票。",
+          "tags": ["规划", "终端"]
         },
         {
           "nameZh": "Command Code",
           "status": "planned",
-          "noteZh": "规划中 · 命令行交互 Agent"
+          "kind": "planned",
+          "bandZh": "规划",
+          "noteZh": "命令行交互 Agent。规划中，不可投票。",
+          "tags": ["规划", "命令行"]
         },
         {
           "nameZh": "Devin",
           "status": "planned",
-          "noteZh": "规划中 · 自治软件工程师 Agent"
+          "kind": "planned",
+          "bandZh": "规划",
+          "noteZh": "自治软件工程师 Agent。规划中，不可投票。",
+          "tags": ["规划"]
         },
         {
           "nameZh": "国内 qcode",
           "status": "planned",
-          "noteZh": "规划中 · 国产大模型代码助手"
+          "kind": "planned",
+          "bandZh": "规划",
+          "noteZh": "国产大模型代码助手。规划中，不可投票。",
+          "tags": ["规划", "国产"]
         },
         {
           "nameZh": "CodeBuddy",
           "status": "planned",
-          "noteZh": "规划中 · 辅助结对编程方案"
+          "kind": "planned",
+          "bandZh": "规划",
+          "noteZh": "辅助结对编程方案。规划中，不可投票。",
+          "tags": ["规划", "结对"]
         }
       ]
     },
     {
       "id": "harness",
-      "titleZh": "运行载体 (Harness)",
-      "blurbZh": "官方优先执行器与命令端载体",
+      "titleZh": "载体",
+      "kickerZh": "官方 / pi",
+      "blurbZh": "官方优先执行器；OpenRouter 侧 pi 作路由载体。",
       "items": [
         {
           "nameZh": "Cursor Cloud Agent",
           "status": "active",
-          "noteZh": "官方优先 · 云端自主分支与演示交付"
+          "kind": "official",
+          "bandZh": "官方",
+          "noteZh": "官方优先。云端自主分支与演示交付。",
+          "tags": ["官方", "Cloud Agent"]
         },
         {
           "nameZh": "Cursor CLI",
           "status": "active",
-          "noteZh": "官方优先 · 终端无缝连接与自动化执行"
+          "kind": "official",
+          "bandZh": "官方",
+          "noteZh": "官方优先。终端连接与自动化执行。",
+          "tags": ["官方", "CLI"]
         },
         {
           "nameZh": "agy / Antigravity",
           "status": "active",
-          "noteZh": "官方优先 · 高阶自治编程智能体"
+          "kind": "official",
+          "bandZh": "官方",
+          "noteZh": "官方优先。高阶自治编程智能体（agy 已用）。",
+          "tags": ["官方", "agy"]
         },
         {
           "nameZh": "pi (OpenRouter 侧)",
           "status": "active",
-          "noteZh": "OpenRouter 模型路由交互载体"
+          "kind": "pi",
+          "bandZh": "pi",
+          "noteZh": "OpenRouter 侧 pi harness：模型路由交互载体。",
+          "tags": ["pi", "OpenRouter"]
         }
       ]
     },
     {
       "id": "environment",
-      "titleZh": "7×24 环境 (Environment)",
-      "blurbZh": "常驻云主机与无间断自动化节点",
+      "titleZh": "7×24",
+      "kickerZh": "Cloud Agent / VPS / KVM",
+      "blurbZh": "常驻节点：Cloud Agent 托管机、自购 VPS、便宜 KVM。",
       "items": [
         {
           "nameZh": "Cursor Cloud Agent 托管机",
           "status": "active",
-          "noteZh": "云端沙盒环境，全自动跑测试与发预览"
+          "kind": "cloud-agent",
+          "bandZh": "Cloud Agent",
+          "noteZh": "云端沙盒：自动跑测试与发预览。",
+          "tags": ["Cloud Agent", "托管机"]
         },
         {
           "nameZh": "Grok Bot 云电脑",
           "status": "active",
-          "noteZh": "常驻云端桌面与自动化任务节点"
+          "kind": "cloud-desktop",
+          "bandZh": "云电脑",
+          "noteZh": "常驻云端桌面与自动化任务节点。",
+          "tags": ["云电脑"]
         },
         {
           "nameZh": "自购 VPS / 便宜 KVM",
           "status": "active",
-          "noteZh": "Vultr 现作梯子；可按需随时另开独立 Agent 专用机"
+          "kind": "vps-kvm",
+          "bandZh": "自购",
+          "noteZh": "自购 VPS 与便宜 KVM。Vultr 现作梯子；可按需另开独立 Agent 专用机。",
+          "tags": ["自购 VPS", "便宜 KVM"]
         }
       ]
     }
