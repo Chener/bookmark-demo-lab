@@ -17,9 +17,11 @@ id = "REPLACE_WITH_KV_NAMESPACE_ID"
 # Primary: every 10 minutes (CRON_UTC in rotate.js) + zero-write skipped_open while the
 # vote window is open. Aligns with 10-minute windows; settle on first */10 tick after closesAt.
 # before_writes_est: ~1300/day (PR#24 tip: */5, ~8–9 puts × 144 rotates/day at 10m windows).
-# after_writes_est: ~720/day = 0 on skipped_open + ~5 puts × 144 rotates
-#   (lock + current-window + pending-ledger + vote-ledger + rotate-status).
-#   Cron omits window-meta; settle does not put rotate-config/arsenal (no cache-if-unchanged).
+# after_writes_est: ~864/day = 720 + 144 (captain A) = 0 on skipped_open + ~6 puts × 144 rotates
+#   (lock + rotate-config + current-window + pending-ledger + vote-ledger + rotate-status;
+#    arsenal best-effort put on fetch success shares TTL-refresh path).
+#   Cron omits window-meta. Fetch success → best-effort put rotate-config/arsenal (TTL refresh);
+#   fetch miss → no put (KV/default fallback). Not cache-if-unchanged.
 # 8h expression 0 0,8,16 * * * is deprecated as the main narrative.
 # If your local untracked wrangler.toml still has */5 or 0 0,8,16 * * *,
 # replace with this example before deploy.

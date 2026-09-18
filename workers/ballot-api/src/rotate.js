@@ -4,15 +4,18 @@
  * field is missing, duration is periodHours (cold/legacy, default 8h).
  * Windows are floor-aligned in timezone by that duration. No git, X, agy, or demo builds.
  *
- * KV write budget (Cron path; Free tier ~1000 writes/day; target ≤800 with headroom):
+ * KV write budget (Cron path; Free tier ~1000 writes/day; captain A ≤1000 with thin headroom):
  *   before_writes_est: ~1300/day at main tip after PR#24 (cron every 5 min; ~8–9 puts × 144 rotates/day
  *     at 10m windows: lock + rotate-config + arsenal + current-window + window-meta +
  *     pending-ledger + vote-ledger + rotate-status; skipped_open = 0 writes).
- *   after_writes_est: ~720/day = 0 on skipped_open + ~5 puts × 144 rotates/day
- *     (lock + current-window + pending-ledger + vote-ledger + rotate-status).
+ *   after_writes_est: ~864/day = 720 + 144 (captain A) = 0 on skipped_open + ~6 puts × 144 rotates/day
+ *     (lock + rotate-config + current-window + pending-ledger + vote-ledger + rotate-status;
+ *      arsenal best-effort put on fetch success shares the TTL-refresh path).
  *     Cron omits window-meta (late votes on old windowId → unknown_window, not window_closed).
- *     Settle fetches rotate-config/arsenal but does not put them (no cache-if-unchanged).
- *     Cron every-10-min aligns with 10m windows. Deletes are a separate Free quota.
+ *     On fetch success: best-effort KV put for rotate-config (and arsenal) to refresh TTL
+ *     even if body unchanged. On fetch miss: no put; read KV cache / defaultConfig fallback.
+ *     Not cache-if-unchanged skip logic. Cron every-10-min aligns with 10m windows.
+ *     Deletes are a separate Free quota.
  */
 
 export const CRON_UTC = "*/10 * * * *";
@@ -331,10 +334,17 @@ export async function fetchFirstJson(urls, fetchImpl) {
 }
 
 export async function loadRotateConfig(env, fetchImpl) {
-  // Fetch-only on Cron settle: do not put rotate-config (saves 1 write/rotate).
-  // KV cache remains a read fallback when origin/raw fetch fails.
+  // Fetch success → best-effort KV put to refresh TTL (body unchanged is OK / preferred).
+  // Fetch miss → no put; KV cache remains a read fallback (then defaultConfig).
   const fetched = await fetchFirstJson(trackingUrls(env, "rotate-config.json"), fetchImpl);
   if (fetched && (fetched.voteWindowMinutes || fetched.periodHours || fetched.slotHours)) {
+    try {
+      await env.BALLOT_KV.put("rotate-config", JSON.stringify(fetched), {
+        expirationTtl: kvTtl(CONFIG_TTL_S)
+      });
+    } catch (_) {
+      /* cache is best-effort */
+    }
     return fetched;
   }
   const cached = await env.BALLOT_KV.get("rotate-config", "json");
@@ -343,8 +353,19 @@ export async function loadRotateConfig(env, fetchImpl) {
 }
 
 export async function loadArsenal(env, fetchImpl) {
+  // Same settle path as rotate-config: put only on fetch success (TTL refresh).
+  // Fetch miss → no put; return KV cache if present.
   const fetched = await fetchFirstJson(trackingUrls(env, "arsenal.json"), fetchImpl);
-  if (fetched) return fetched;
+  if (fetched) {
+    try {
+      await env.BALLOT_KV.put("arsenal", JSON.stringify(fetched), {
+        expirationTtl: kvTtl(CONFIG_TTL_S)
+      });
+    } catch (_) {
+      /* cache is best-effort */
+    }
+    return fetched;
+  }
   const cached = await env.BALLOT_KV.get("arsenal", "json");
   return cached || null;
 }
@@ -591,8 +612,7 @@ export async function runRotate(env, opts) {
       };
 
       const loadCachedArsenal = async function () {
-        // Fetch-only: do not put arsenal on settle (saves 1 write/rotate).
-        // Existing KV arsenal remains a read fallback if fetch throws.
+        // loadArsenal puts on fetch success only; miss/throw → KV read, no put.
         let arsenal = null;
         try {
           arsenal = await loadArsenal(env, fetchImpl);

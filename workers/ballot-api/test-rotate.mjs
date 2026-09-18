@@ -19,6 +19,7 @@ import {
   voteWindowMinutes,
   CRON_UTC,
   loadRotateConfig,
+  loadArsenal,
   persistWindow,
   LOCK_TTL_S,
   KV_MIN_TTL_S,
@@ -354,10 +355,11 @@ test("periodHours come from fetched rotate-config, else KV cache", async () => {
   assert.equal(status.ok, true);
   const next = await kv.get("current-window", "json");
   assert.equal(next.periodHours, 2);
-  // Cron no longer puts rotate-config; seed KV so fetch-fail path can use cache.
-  assert.equal(await kv.get("rotate-config", "json"), null);
-  await kv.put("rotate-config", JSON.stringify(cfg2));
+  // Fetch success best-effort-puts rotate-config so miss path can use KV cache.
+  const cachedCfg = await kv.get("rotate-config", "json");
+  assert.equal(cachedCfg.periodHours, 2);
 
+  const putsBeforeMiss = kv.puts.length;
   const fetchFail = async function () {
     return { ok: false, json: async () => null };
   };
@@ -370,6 +372,10 @@ test("periodHours come from fetched rotate-config, else KV cache", async () => {
   assert.equal(status2.ok, true);
   const next2 = await kv.get("current-window", "json");
   assert.equal(next2.periodHours, 2);
+  // Fetch miss must not put rotate-config (or arsenal).
+  const missPuts = kv.puts.slice(putsBeforeMiss);
+  assert.equal(missPuts.filter(function (p) { return p.key === "rotate-config"; }).length, 0);
+  assert.equal(missPuts.filter(function (p) { return p.key === "arsenal"; }).length, 0);
 });
 
 test("config fetch fallback to GitHub raw URL", async () => {
@@ -1671,7 +1677,7 @@ test("stale lower status failCount does not delay exhaustion vs KEY", async () =
   assert.equal(status.pendingLedger, undefined);
 });
 
-test("Cron rotate omits rotate-config, arsenal, and window-meta puts", async () => {
+test("Cron rotate puts rotate-config/arsenal on fetch success but omits window-meta", async () => {
   const cfgPayload = fixture("/tracking/rotate-config.json");
   const arsenalPayload = fixture("/tracking/arsenal.json");
   const kv = new MemKV();
@@ -1702,8 +1708,8 @@ test("Cron rotate omits rotate-config, arsenal, and window-meta puts", async () 
   assert.equal(status.action, "rotated");
   const configPuts = kv.puts.filter(function (p) { return p.key === "rotate-config"; });
   const arsenalPuts = kv.puts.filter(function (p) { return p.key === "arsenal"; });
-  assert.equal(configPuts.length, 0);
-  assert.equal(arsenalPuts.length, 0);
+  assert.ok(configPuts.length >= 1);
+  assert.ok(arsenalPuts.length >= 1);
   const metaPuts = kv.puts.filter(function (p) {
     return String(p.key).indexOf("window-meta:") === 0;
   });
@@ -1714,7 +1720,7 @@ test("Cron rotate omits rotate-config, arsenal, and window-meta puts", async () 
   assert.ok(kv.puts.some(function (p) { return p.key === "rotate-status"; }));
 });
 
-test("loadRotateConfig does not put when fetch succeeds", async () => {
+test("loadRotateConfig puts on fetch success to refresh TTL", async () => {
   const cfgPayload = fixture("/tracking/rotate-config.json");
   const kv = new MemKV();
   await kv.put("rotate-config", JSON.stringify(cfgPayload));
@@ -1722,7 +1728,78 @@ test("loadRotateConfig does not put when fetch succeeds", async () => {
   const env = { BALLOT_KV: kv, ORIGIN: "https://bookmark-demo-lab.pages.dev" };
   const loaded = await loadRotateConfig(env, mockFetch());
   assert.equal(loaded.periodHours, cfgPayload.periodHours);
+  const configPuts = kv.puts.filter(function (p) { return p.key === "rotate-config"; });
+  assert.equal(configPuts.length, 1);
+  assert.ok(configPuts[0].options.expirationTtl >= 60);
+});
+
+test("loadRotateConfig fetch miss does not put", async () => {
+  const kv = new MemKV();
+  await kv.put("rotate-config", JSON.stringify({
+    timezone: "Asia/Shanghai",
+    periodHours: 2,
+    slotHours: [0, 2, 4, 6, 8, 10, 12, 14, 16, 18, 20, 22]
+  }));
+  kv.puts = [];
+  const env = { BALLOT_KV: kv, ORIGIN: "https://example.test" };
+  const fetchFail = async function () {
+    return { ok: false, json: async () => null };
+  };
+  const loaded = await loadRotateConfig(env, fetchFail);
+  assert.equal(loaded.periodHours, 2);
   assert.equal(kv.puts.filter(function (p) { return p.key === "rotate-config"; }).length, 0);
+});
+
+test("loadArsenal puts on fetch success; miss does not put", async () => {
+  const arsenalPayload = fixture("/tracking/arsenal.json");
+  const kv = new MemKV();
+  const env = { BALLOT_KV: kv, ORIGIN: "https://bookmark-demo-lab.pages.dev" };
+  kv.puts = [];
+  const loaded = await loadArsenal(env, mockFetch());
+  assert.ok(loaded && Array.isArray(loaded.sections));
+  assert.equal(kv.puts.filter(function (p) { return p.key === "arsenal"; }).length, 1);
+
+  await kv.put("arsenal", JSON.stringify(arsenalPayload));
+  kv.puts = [];
+  const fetchFail = async function () {
+    return { ok: false, json: async () => null };
+  };
+  const cached = await loadArsenal(env, fetchFail);
+  assert.equal(cached.sections.length, arsenalPayload.sections.length);
+  assert.equal(kv.puts.filter(function (p) { return p.key === "arsenal"; }).length, 0);
+});
+
+test("KV cold + fetch ok keeps 10m window invariant", async () => {
+  const kv = new MemKV();
+  // Cold KV: no rotate-config cache. Fetch returns voteWindowMinutes: 10.
+  assert.equal(await kv.get("rotate-config"), null);
+  const cfg10 = {
+    timezone: "Asia/Shanghai",
+    voteWindowMinutes: 10,
+    periodHours: 8,
+    slotHours: [0, 8, 16]
+  };
+  const fetchImpl = async function (url) {
+    const u = new URL(url);
+    if (u.pathname.endsWith("rotate-config.json")) {
+      return { ok: true, json: async () => cfg10 };
+    }
+    return mockFetch()(url);
+  };
+  const env = { BALLOT_KV: kv, ORIGIN: "https://example.test" };
+  const status = await runRotate(env, {
+    nowMs: parseIso("2026-09-15T16:05:00.000Z"),
+    skipLock: true,
+    fetchImpl: fetchImpl
+  });
+  assert.equal(status.ok, true);
+  assert.ok(status.action === "rotated" || status.action === "bootstrapped");
+  const win = await kv.get("current-window", "json");
+  assert.equal(win.voteWindowMinutes, 10);
+  assert.equal(Date.parse(win.closesAt) - Date.parse(win.opensAt), 10 * 60 * 1000);
+  // Successful fetch must have refreshed rotate-config into KV.
+  const stored = await kv.get("rotate-config", "json");
+  assert.equal(stored.voteWindowMinutes, 10);
 });
 
 test("writeCommittedStatus keeps PENDING_LEDGER_KEY if rotate-status put fails after ledger", async () => {
