@@ -3,9 +3,16 @@
  * Window length comes from fetched rotate-config voteWindowMinutes; if that
  * field is missing, duration is periodHours (cold/legacy, default 8h).
  * Windows are floor-aligned in timezone by that duration. No git, X, agy, or demo builds.
+ *
+ * KV write budget (Cron path; Free tier ~1000 writes/day):
+ *   before_writes_est: ~1641/day (observed every-minute cron: lock/status on skipped_open ticks)
+ *   after_writes_est: at most ~300/day avoidable cron-path writes (0 on skipped_open; 5-min poll;
+ *     no redundant rotate-status/cache puts). Essential settle puts still scale (~5×rotates).
  */
 
-export const CRON_UTC = "*/10 * * * *";
+export const CRON_UTC = "*/5 * * * *";
+/** When the window is still open, act on pending repair / pre-close polling within this margin. */
+export const NEAR_CLOSE_MS = 150000;
 export const CONFIG_TTL_S = 60 * 60 * 24 * 7;
 export const LEDGER_TTL_S = 60 * 60 * 24 * 14;
 export const STATUS_TTL_S = 60 * 60 * 24 * 14;
@@ -15,6 +22,20 @@ export const LOCK_TTL_S = 60;
 
 export function kvTtl(seconds) {
   return Math.max(KV_MIN_TTL_S, Number(seconds) || 0);
+}
+
+export function isNearClose(nowMs, closesAtMs) {
+  const closes = Number(closesAtMs);
+  const now = Number(nowMs);
+  if (!Number.isFinite(closes) || !Number.isFinite(now)) return false;
+  const remaining = closes - now;
+  if (remaining <= 0) return true;
+  return remaining <= NEAR_CLOSE_MS;
+}
+
+/** Open-window Cron ticks far from closesAt need no mutate path; settle lands within ~5m of closesAt. */
+export function shouldActOnOpenWindow(nowMs, closesAtMs) {
+  return isNearClose(nowMs, closesAtMs);
 }
 
 /** KV / runtime error name only. Never echo messages (may contain secrets). */
@@ -324,9 +345,13 @@ export async function loadRotateConfig(env, fetchImpl) {
   const fetched = await fetchFirstJson(trackingUrls(env, "rotate-config.json"), fetchImpl);
   if (fetched && (fetched.voteWindowMinutes || fetched.periodHours || fetched.slotHours)) {
     try {
-      await env.BALLOT_KV.put("rotate-config", JSON.stringify(fetched), {
-        expirationTtl: kvTtl(CONFIG_TTL_S)
-      });
+      const serialized = JSON.stringify(fetched);
+      const existing = await env.BALLOT_KV.get("rotate-config");
+      if (existing !== serialized) {
+        await env.BALLOT_KV.put("rotate-config", serialized, {
+          expirationTtl: kvTtl(CONFIG_TTL_S)
+        });
+      }
     } catch (_) {
       /* cache is best-effort */
     }
@@ -362,13 +387,16 @@ async function putJson(kv, key, value, ttl) {
   await kv.put(key, JSON.stringify(value), { expirationTtl: kvTtl(ttl) });
 }
 
-export async function persistWindow(kv, ballot) {
+export async function persistWindow(kv, ballot, options) {
+  const opts = options || {};
   const snapshot = windowSnapshot(ballot);
   await putJson(kv, "current-window", snapshot, LEDGER_TTL_S);
-  try {
-    await putJson(kv, "window-meta:" + snapshot.windowId, snapshot, LEDGER_TTL_S);
-  } catch (_) {
-    /* current-window is source of truth for GET /api/window */
+  if (opts.persistMeta === true) {
+    try {
+      await putJson(kv, "window-meta:" + snapshot.windowId, snapshot, LEDGER_TTL_S);
+    } catch (_) {
+      /* current-window is source of truth for GET /api/window */
+    }
   }
   return snapshot;
 }
@@ -580,7 +608,16 @@ export async function runRotate(env, opts) {
         try {
           arsenal = await loadArsenal(env, fetchImpl);
           if (arsenal) {
-            await putJson(kv, "arsenal", arsenal, CONFIG_TTL_S);
+            const serialized = JSON.stringify(arsenal);
+            let existing = null;
+            try {
+              existing = await kv.get("arsenal");
+            } catch (_) {
+              existing = null;
+            }
+            if (existing !== serialized) {
+              await putJson(kv, "arsenal", arsenal, CONFIG_TTL_S);
+            }
           }
         } catch (_) {
           arsenal = await kv.get("arsenal", "json");
@@ -697,6 +734,26 @@ export async function runRotate(env, opts) {
           return await fail("invalid_window", { settledWindowId: current.windowId });
         }
         if (nowMs < closesMs && !force) {
+          if (
+            !(pending && pending.settledWindowId) &&
+            !shouldActOnOpenWindow(nowMs, closesMs)
+          ) {
+            return {
+              version: 1,
+              at: started,
+              cron: cron,
+              scheduledTime: isoZ(Number(options.scheduledTime) || nowMs),
+              ok: true,
+              action: "skipped_open",
+              settledWindowId: null,
+              nextWindowId: current.windowId,
+              voteCount: 0,
+              needsGitPush: priorFlags.needsGitPush,
+              needsXIngest: priorFlags.needsXIngest,
+              noteZh:
+                "当前窗仍未关闭且距 closesAt 较远，Worker Cron 跳过（零 KV 写）。needsGitPush / needsXIngest 沿用上次成功转窗。"
+            };
+          }
           if (repairResult && repairResult.ok) {
             committed = {
               version: 1,
@@ -822,17 +879,6 @@ export async function runRotate(env, opts) {
           await putJson(kv, PENDING_LEDGER_KEY, pendingMarker, STATUS_TTL_S);
         } catch (_) {
           /* failLedger still retries the marker */
-        }
-        try {
-          const optimistic = Object.assign({}, priorStatus || {}, {
-            pendingLedger: pendingMarker,
-            needsGitPush: true,
-            needsXIngest: true
-          });
-          await putJson(kv, "rotate-status", optimistic, STATUS_TTL_S);
-          priorStatus = optimistic;
-        } catch (_) {
-          /* KEY is the backup if status put fails */
         }
         try {
           await putJson(kv, "vote-ledger", settled.ledger, LEDGER_TTL_S);

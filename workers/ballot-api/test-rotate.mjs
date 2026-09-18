@@ -18,6 +18,10 @@ import {
   periodHours,
   voteWindowMinutes,
   CRON_UTC,
+  NEAR_CLOSE_MS,
+  isNearClose,
+  shouldActOnOpenWindow,
+  loadRotateConfig,
   LOCK_TTL_S,
   KV_MIN_TTL_S,
   kvTtl,
@@ -207,7 +211,7 @@ const CFG10 = {
 test("10-minute voteWindowMinutes sets closesAt = opensAt + 10m", () => {
   assert.equal(voteWindowMinutes(CFG10), 10);
   assert.equal(voteWindowMinutes(CFG), 8 * 60);
-  assert.equal(CRON_UTC, "*/10 * * * *");
+  assert.equal(CRON_UTC, "*/5 * * * *");
 
   const now = parseIso("2026-09-16T00:03:00.000Z");
   const win = containingWindow(now, CFG10);
@@ -876,12 +880,21 @@ test("safeErrorDetail is the error name and never echoes secrets", () => {
   assert.equal(safeErrorDetail(dirty), "Errscriptalert1script");
 });
 
-test("CRON_UTC and wrangler example fire every 10 minutes", () => {
-  assert.equal(CRON_UTC, "*/10 * * * *");
+test("CRON_UTC and wrangler example fire every 5 minutes", () => {
+  assert.equal(CRON_UTC, "*/5 * * * *");
   const here = dirname(fileURLToPath(import.meta.url));
   const toml = readFileSync(join(here, "wrangler.toml.example"), "utf8");
-  assert.match(toml, /crons\s*=\s*\["\*\/10 \* \* \* \*"\]/);
+  assert.match(toml, /crons\s*=\s*\["\*\/5 \* \* \* \*"\]/);
   assert.doesNotMatch(toml, /\["\*\/1 \* \* \* \*"\]/);
+});
+
+test("isNearClose and shouldActOnOpenWindow gate open-window polling", () => {
+  assert.equal(NEAR_CLOSE_MS, 150000);
+  const closes = parseIso("2026-09-15T16:00:00.000Z");
+  assert.equal(isNearClose(parseIso("2026-09-15T15:58:00.000Z"), closes), true);
+  assert.equal(shouldActOnOpenWindow(parseIso("2026-09-15T15:58:00.000Z"), closes), true);
+  assert.equal(isNearClose(parseIso("2026-09-15T12:29:00.000Z"), closes), false);
+  assert.equal(shouldActOnOpenWindow(parseIso("2026-09-15T12:29:00.000Z"), closes), false);
 });
 
 test("skipped_open does not put rotate-status", async () => {
@@ -948,6 +961,10 @@ test("runRotate puts current-window then pending-ledger then vote-ledger", async
   assert.ok(ledgerIdx >= 0);
   assert.ok(winIdx < pendingIdx);
   assert.ok(pendingIdx < ledgerIdx);
+  const statusBeforeLedger = kv.puts
+    .slice(0, ledgerIdx)
+    .filter(function (p) { return p.key === "rotate-status"; });
+  assert.equal(statusBeforeLedger.length, 0);
   assert.equal(await kv.get(PENDING_LEDGER_KEY), null);
 });
 
@@ -1507,7 +1524,7 @@ test("ledger_repair_exhausted then settles already-closed current window same ti
   assert.equal(await kv.get(PENDING_LEDGER_KEY), null);
 });
 
-test("optimistic pending-ledger is written before vote-ledger even when ledger throws", async () => {
+test("pending-ledger KEY is written before vote-ledger even when ledger throws", async () => {
   const kv = new MemKV();
   await kv.put("current-window", JSON.stringify({
     windowId: "2026-09-15-16",
@@ -1548,6 +1565,10 @@ test("optimistic pending-ledger is written before vote-ledger even when ledger t
   assert.ok(pendingIdx >= 0);
   assert.ok(ledgerIdx >= 0);
   assert.ok(pendingIdx < ledgerIdx);
+  const midStatus = kv.puts
+    .slice(0, ledgerIdx)
+    .filter(function (p) { return p.key === "rotate-status"; });
+  assert.equal(midStatus.length, 0);
   const marker = await kv.get(PENDING_LEDGER_KEY, "json");
   assert.equal(marker.settledWindowId, "2026-09-15-16");
   const next = await kv.get("current-window", "json");
@@ -1651,3 +1672,48 @@ test("stale lower status failCount does not delay exhaustion vs KEY", async () =
   assert.equal(status.pendingLedger, undefined);
 });
 
+test("unchanged rotate-config and arsenal skip redundant KV puts", async () => {
+  const cfgPayload = fixture("/tracking/rotate-config.json");
+  const arsenalPayload = fixture("/tracking/arsenal.json");
+  const kv = new MemKV();
+  await kv.put("rotate-config", JSON.stringify(cfgPayload));
+  await kv.put("arsenal", JSON.stringify(arsenalPayload));
+  await kv.put("current-window", JSON.stringify({
+    windowId: "2026-09-15-16",
+    opensAt: "2026-09-15T08:00:00.000Z",
+    closesAt: "2026-09-15T16:00:00.000Z",
+    periodHours: 8,
+    candidates: [],
+    options: { fuel: ["Cursor Ultra"], harness: ["Cursor Cloud Agent"], environment: ["Cursor Cloud Agent 托管机"] }
+  }));
+  await kv.put("tally:2026-09-15-16", JSON.stringify({
+    voteCount: 1,
+    fuel: { "Cursor Ultra": 1 },
+    harness: { "Cursor Cloud Agent": 1 },
+    environment: { "Cursor Cloud Agent 托管机": 1 },
+    candidate: {}
+  }));
+  kv.puts = [];
+  const env = { BALLOT_KV: kv, ORIGIN: "https://bookmark-demo-lab.pages.dev" };
+  const status = await runRotate(env, {
+    nowMs: parseIso("2026-09-15T16:00:00.000Z"),
+    skipLock: true,
+    fetchImpl: mockFetch()
+  });
+  assert.equal(status.action, "rotated");
+  const configPuts = kv.puts.filter(function (p) { return p.key === "rotate-config"; });
+  const arsenalPuts = kv.puts.filter(function (p) { return p.key === "arsenal"; });
+  assert.equal(configPuts.length, 0);
+  assert.equal(arsenalPuts.length, 0);
+});
+
+test("loadRotateConfig skips put when cached JSON matches fetch", async () => {
+  const cfgPayload = fixture("/tracking/rotate-config.json");
+  const kv = new MemKV();
+  await kv.put("rotate-config", JSON.stringify(cfgPayload));
+  kv.puts = [];
+  const env = { BALLOT_KV: kv, ORIGIN: "https://bookmark-demo-lab.pages.dev" };
+  const loaded = await loadRotateConfig(env, mockFetch());
+  assert.equal(loaded.periodHours, cfgPayload.periodHours);
+  assert.equal(kv.puts.filter(function (p) { return p.key === "rotate-config"; }).length, 0);
+});
