@@ -2,7 +2,7 @@
 
 从 X 书签出发的日常技术演示：切分支 → 获得 **Cloudflare Pages 预览地址**。
 
-一个仓库、多套独立应用。根目录 `index.html` 是轻量枢纽；每个演示放在 `apps/<slug>/`，可单独打开。
+一个仓库、多套独立应用。根目录 `index.html` + `hub.css` / `hub.js` 是轻量枢纽；每个演示放在 `apps/<slug>/`，可单独打开。
 
 ## 布局
 
@@ -16,6 +16,7 @@ tracking/vote-ledger.json         # 上一窗结算账本（winningStack / autoP
 workers/ballot-api/               # 唯一后端：投票 + KV + Workers Cron Triggers
 scripts/rotate-beat.py            # 人工/管理员回退（Cron 才是主调度）
 index.html                        # 枢纽：卡片 + 待投票 + 军火库 + 原帖
+hub.css / hub.js                  # 枢纽样式与投票/军火库逻辑（静态，不进 Worker）
 ```
 
 枢纽与演示仍是 **静态 Cloudflare Pages**（Framework preset: None，构建命令留空，输出目录 `/`）。不要自定义域名、CNAME、Workers Builds，也不要另开 Pages/Workers 项目。
@@ -151,11 +152,13 @@ python 回退路径：Vote API 失败或 `voteApiBase` 为空则 **中止**（�
 
 ### 军火库目录规范 (`tracking/arsenal.json`)
 
-`tracking/arsenal.json` 驱动根枢纽下方的「军火库 · 当前在用」目录模块。纯目录清单风格（不搞剩余百分比或倒计时等虚浮指标），采用三段式结构：
+`tracking/arsenal.json` 驱动根枢纽下方的「军火库」总览。纯目录清单风格（不搞剩余百分比或倒计时等虚浮指标）；**额度明细由 CodexBar 负责，枢纽只做总览与标签**。三段式结构：
 
 1. **燃料 (fuel)**：高性价比（≤~$20）或前沿免费选项，如 `Cursor Ultra`、`Google AI Pro · Antigravity / alphatradebot`、`OpenRouter 前沿免费`，以及规划中（planned）的备选工具。
-2. **运行载体 (harness)**：官方优先的执行载体，如 `Cursor Cloud Agent`、`Cursor CLI`、`agy / Antigravity`，以及 OpenRouter 侧的 `pi`。
+2. **运行载体 (harness)**：官方优先的执行载体，如 `Cursor Cloud Agent`、`Cursor CLI`、`agy / Antigravity`，以及 OpenRouter 侧的 `pi` harness。
 3. **7×24 环境 (environment)**：常驻云环境，如 `Cursor Cloud Agent 托管机`、`Grok Bot 云电脑`、`自购 VPS / 便宜 KVM`（如 Vultr 现作梯子，可按需随时另开独立 Agent 专用机）。
+
+**不要在枢纽或本文件里编造单价 / 套餐报价。** `≤~$20` 与「前沿免费」是分层标签，不是商品标价。
 
 **Schema 结构与字段说明**：
 
@@ -163,14 +166,21 @@ python 回退路径：Vote API 失败或 `voteApiBase` 为空则 **中止**（�
 | --- | --- | --- | --- |
 | `version` | number | 必选 | 配置版本号（目前为 1） |
 | `updatedAt` | string | 必选 | ISO 8601 更新时间戳 |
+| `overviewZh` | string | 可选 | 三层总览一句 |
+| `quotaBoardZh` | string | 可选 | 配额看板名称（如 `CodexBar`） |
+| `quotaNoteZh` | string | 可选 | 提醒额度细节不在枢纽展示 |
 | `sections` | array | 必选 | 分组列表（燃料、运行载体、7×24 环境） |
 | `sections[].id` | string | 必选 | 分组唯一标识（`fuel` / `harness` / `environment`） |
 | `sections[].titleZh` | string | 必选 | 分组中文标题 |
+| `sections[].kickerZh` | string | 可选 | 分组短标签（如 `官方 / pi`） |
 | `sections[].blurbZh` | string | 可选 | 分组简要副标题说明 |
 | `sections[].items` | array | 必选 | 组内收录的技术项列表 |
-| `items[].nameZh` | string | 必选 | 工具 / 方案中文名称 |
+| `items[].nameZh` | string | 必选 | 工具 / 方案中文名称（投票选项以此为准，勿改 active 名） |
 | `items[].status` | string | 必选 | 状态：`active`（当前启用，高亮绿标）或 `planned`（规划中，弱化展示） |
+| `items[].kind` | string | 可选 | 角色：`subscription` / `free-frontier` / `official` / `pi` / `cloud-agent` / `vps-kvm` / `planned` 等 |
+| `items[].bandZh` | string | 可选 | 分层标签（高性价比 / 前沿免费 / 官方 / pi），**不是价格** |
 | `items[].noteZh` | string | 可选 | 角色说明与使用方式备注 |
+| `items[].tags` | string[] | 可选 | 枢纽胶囊标签 |
 
 **容错约定**：
 - 静态页面通过 `fetch("./tracking/arsenal.json")` 异步渲染；
