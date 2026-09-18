@@ -3,9 +3,16 @@
  * Window length comes from fetched rotate-config voteWindowMinutes; if that
  * field is missing, duration is periodHours (cold/legacy, default 8h).
  * Windows are floor-aligned in timezone by that duration. No git, X, agy, or demo builds.
+ *
+ * KV write budget (Cron path; Free tier ~1000 writes/day):
+ *   before_writes_est: ~1641/day (observed every-minute cron: lock/status on skipped_open ticks)
+ *   after_writes_est: ~0 avoidable on skipped_open (every-5-min poll; single open-window skip
+ *     before claimLock; no optimistic rotate-status). Settle path refreshes rotate-config/arsenal
+ *     and writes window-meta (~1/rotate) — roughly ~8–9 KV writes x rotates/day (~1300/day at 10m
+ *     windows; Free-plan tight). Captain: no near-close gate; no cache-if-unchanged.
  */
 
-export const CRON_UTC = "*/10 * * * *";
+export const CRON_UTC = "*/5 * * * *";
 export const CONFIG_TTL_S = 60 * 60 * 24 * 7;
 export const LEDGER_TTL_S = 60 * 60 * 24 * 14;
 export const STATUS_TTL_S = 60 * 60 * 24 * 14;
@@ -515,14 +522,10 @@ export async function runRotate(env, opts) {
     });
     delete payload.pendingLedger;
     delete payload.error;
-    try {
-      await kv.delete(PENDING_LEDGER_KEY);
-    } catch (_) {
-      /* missing key is fine */
-    }
+    let wrote = false;
     try {
       await writeStatus(payload, false);
-      return payload;
+      wrote = true;
     } catch (_) {
       try {
         const prior = await kv.get("rotate-status", "json");
@@ -538,11 +541,19 @@ export async function runRotate(env, opts) {
         delete patched.error;
         delete patched.pendingLedger;
         await writeStatus(patched, false);
+        wrote = true;
       } catch (__) {
         /* return in-memory flags-true status; never write 未改窗 */
       }
-      return payload;
     }
+    if (wrote) {
+      try {
+        await kv.delete(PENDING_LEDGER_KEY);
+      } catch (_) {
+        /* missing key is fine */
+      }
+    }
+    return payload;
   };
 
   let priorStatus = null;
@@ -656,11 +667,9 @@ export async function runRotate(env, opts) {
             status: status
           };
         }
-        try {
-          await kv.delete(PENDING_LEDGER_KEY);
-        } catch (_) {
-          /* missing key is fine */
-        }
+        // Keep PENDING_LEDGER_KEY until writeCommittedStatus durably puts
+        // rotate-status (then deletes KEY). Deleting here left a gap where
+        // ledger was rewritten but status put failed → no KEY, no flags.
         if (priorStatus) delete priorStatus.pendingLedger;
         return {
           ok: true,
@@ -732,7 +741,7 @@ export async function runRotate(env, opts) {
             voteCount: 0,
             needsGitPush: priorFlags.needsGitPush,
             needsXIngest: priorFlags.needsXIngest,
-            noteZh: "当前窗仍未关闭，Worker Cron 跳过。needsGitPush / needsXIngest 沿用上次成功转窗，直至 harness POST /api/rotate-status/ack。"
+            noteZh: "当前窗仍未关闭，Worker Cron 跳过（零 KV 写）。needsGitPush / needsXIngest 沿用上次成功转窗，直至 harness POST /api/rotate-status/ack。"
           };
         }
       }
@@ -822,17 +831,6 @@ export async function runRotate(env, opts) {
           await putJson(kv, PENDING_LEDGER_KEY, pendingMarker, STATUS_TTL_S);
         } catch (_) {
           /* failLedger still retries the marker */
-        }
-        try {
-          const optimistic = Object.assign({}, priorStatus || {}, {
-            pendingLedger: pendingMarker,
-            needsGitPush: true,
-            needsXIngest: true
-          });
-          await putJson(kv, "rotate-status", optimistic, STATUS_TTL_S);
-          priorStatus = optimistic;
-        } catch (_) {
-          /* KEY is the backup if status put fails */
         }
         try {
           await putJson(kv, "vote-ledger", settled.ledger, LEDGER_TTL_S);

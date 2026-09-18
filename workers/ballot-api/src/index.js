@@ -14,8 +14,8 @@
  * POST /api/rotate-status/ack  (admin; clear needsGitPush / needsXIngest)
  * POST /api/rotate         (admin; same slim settle/open as Cron)
  *
- * Scheduled: Cloudflare Workers Cron Triggers UTC every-10-min (see CRON_UTC)
- * so 10-minute vote windows are settled near closesAt.
+ * Scheduled: Cloudflare Workers Cron Triggers UTC every 5 minutes (see CRON_UTC)
+ * with zero-write skipped_open while the vote window is open; settles on the first tick after closesAt.
  * 8h UTC 0 0,8,16 * * * slots are deprecated as the primary narrative.
  * Not crontab. Not Grok Bot.
  */
