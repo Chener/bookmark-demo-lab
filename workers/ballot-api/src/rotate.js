@@ -4,15 +4,21 @@
  * field is missing, duration is periodHours (cold/legacy, default 8h).
  * Windows are floor-aligned in timezone by that duration. No git, X, agy, or demo builds.
  *
- * KV write budget (Cron path; Free tier ~1000 writes/day):
- *   before_writes_est: ~1641/day (observed every-minute cron: lock/status on skipped_open ticks)
- *   after_writes_est: ~0 avoidable on skipped_open (every-5-min poll; single open-window skip
- *     before claimLock; no optimistic rotate-status). Settle path refreshes rotate-config/arsenal
- *     and writes window-meta (~1/rotate) — roughly ~8–9 KV writes x rotates/day (~1300/day at 10m
- *     windows; Free-plan tight). Captain: no near-close gate; no cache-if-unchanged.
+ * KV write budget (Cron path; Free tier ~1000 writes/day; captain A ≤1000 with thin headroom):
+ *   before_writes_est: ~1300/day at main tip after PR#24 (cron every 5 min; ~8–9 puts × 144 rotates/day
+ *     at 10m windows: lock + rotate-config + arsenal + current-window + window-meta +
+ *     pending-ledger + vote-ledger + rotate-status; skipped_open = 0 writes).
+ *   after_writes_est: ~864/day = 720 + 144 (captain A) = 0 on skipped_open + ~6 puts × 144 rotates/day
+ *     (lock + rotate-config + current-window + pending-ledger + vote-ledger + rotate-status;
+ *      arsenal best-effort put on fetch success shares the TTL-refresh path).
+ *     Cron omits window-meta (late votes on old windowId → unknown_window, not window_closed).
+ *     On fetch success: best-effort KV put for rotate-config (and arsenal) to refresh TTL
+ *     even if body unchanged. On fetch miss: no put; read KV cache / defaultConfig fallback.
+ *     Not cache-if-unchanged skip logic. Cron every-10-min aligns with 10m windows.
+ *     Deletes are a separate Free quota.
  */
 
-export const CRON_UTC = "*/5 * * * *";
+export const CRON_UTC = "*/10 * * * *";
 export const CONFIG_TTL_S = 60 * 60 * 24 * 7;
 export const LEDGER_TTL_S = 60 * 60 * 24 * 14;
 export const STATUS_TTL_S = 60 * 60 * 24 * 14;
@@ -328,6 +334,8 @@ export async function fetchFirstJson(urls, fetchImpl) {
 }
 
 export async function loadRotateConfig(env, fetchImpl) {
+  // Fetch success → best-effort KV put to refresh TTL (body unchanged is OK / preferred).
+  // Fetch miss → no put; KV cache remains a read fallback (then defaultConfig).
   const fetched = await fetchFirstJson(trackingUrls(env, "rotate-config.json"), fetchImpl);
   if (fetched && (fetched.voteWindowMinutes || fetched.periodHours || fetched.slotHours)) {
     try {
@@ -345,8 +353,19 @@ export async function loadRotateConfig(env, fetchImpl) {
 }
 
 export async function loadArsenal(env, fetchImpl) {
+  // Same settle path as rotate-config: put only on fetch success (TTL refresh).
+  // Fetch miss → no put; return KV cache if present.
   const fetched = await fetchFirstJson(trackingUrls(env, "arsenal.json"), fetchImpl);
-  if (fetched) return fetched;
+  if (fetched) {
+    try {
+      await env.BALLOT_KV.put("arsenal", JSON.stringify(fetched), {
+        expirationTtl: kvTtl(CONFIG_TTL_S)
+      });
+    } catch (_) {
+      /* cache is best-effort */
+    }
+    return fetched;
+  }
   const cached = await env.BALLOT_KV.get("arsenal", "json");
   return cached || null;
 }
@@ -369,13 +388,19 @@ async function putJson(kv, key, value, ttl) {
   await kv.put(key, JSON.stringify(value), { expirationTtl: kvTtl(ttl) });
 }
 
-export async function persistWindow(kv, ballot) {
+export async function persistWindow(kv, ballot, options) {
+  const opts = options || {};
   const snapshot = windowSnapshot(ballot);
   await putJson(kv, "current-window", snapshot, LEDGER_TTL_S);
-  try {
-    await putJson(kv, "window-meta:" + snapshot.windowId, snapshot, LEDGER_TTL_S);
-  } catch (_) {
-    /* current-window is source of truth for GET /api/window */
+  // Cron settle/open omits window-meta (default) to save 1 write/rotate.
+  // Tradeoff: POST /api/vote for a non-current windowId returns unknown_window
+  // instead of window_closed. Admin PUT /api/window passes persistMeta: true.
+  if (opts.persistMeta === true) {
+    try {
+      await putJson(kv, "window-meta:" + snapshot.windowId, snapshot, LEDGER_TTL_S);
+    } catch (_) {
+      /* current-window is source of truth for GET /api/window */
+    }
   }
   return snapshot;
 }
@@ -587,12 +612,10 @@ export async function runRotate(env, opts) {
       };
 
       const loadCachedArsenal = async function () {
+        // loadArsenal puts on fetch success only; miss/throw → KV read, no put.
         let arsenal = null;
         try {
           arsenal = await loadArsenal(env, fetchImpl);
-          if (arsenal) {
-            await putJson(kv, "arsenal", arsenal, CONFIG_TTL_S);
-          }
         } catch (_) {
           arsenal = await kv.get("arsenal", "json");
         }

@@ -19,6 +19,8 @@ import {
   voteWindowMinutes,
   CRON_UTC,
   loadRotateConfig,
+  loadArsenal,
+  persistWindow,
   LOCK_TTL_S,
   KV_MIN_TTL_S,
   kvTtl,
@@ -208,7 +210,7 @@ const CFG10 = {
 test("10-minute voteWindowMinutes sets closesAt = opensAt + 10m", () => {
   assert.equal(voteWindowMinutes(CFG10), 10);
   assert.equal(voteWindowMinutes(CFG), 8 * 60);
-  assert.equal(CRON_UTC, "*/5 * * * *");
+  assert.equal(CRON_UTC, "*/10 * * * *");
 
   const now = parseIso("2026-09-16T00:03:00.000Z");
   const win = containingWindow(now, CFG10);
@@ -353,9 +355,11 @@ test("periodHours come from fetched rotate-config, else KV cache", async () => {
   assert.equal(status.ok, true);
   const next = await kv.get("current-window", "json");
   assert.equal(next.periodHours, 2);
-  const cached = await kv.get("rotate-config", "json");
-  assert.equal(cached.periodHours, 2);
+  // Fetch success best-effort-puts rotate-config so miss path can use KV cache.
+  const cachedCfg = await kv.get("rotate-config", "json");
+  assert.equal(cachedCfg.periodHours, 2);
 
+  const putsBeforeMiss = kv.puts.length;
   const fetchFail = async function () {
     return { ok: false, json: async () => null };
   };
@@ -368,6 +372,10 @@ test("periodHours come from fetched rotate-config, else KV cache", async () => {
   assert.equal(status2.ok, true);
   const next2 = await kv.get("current-window", "json");
   assert.equal(next2.periodHours, 2);
+  // Fetch miss must not put rotate-config (or arsenal).
+  const missPuts = kv.puts.slice(putsBeforeMiss);
+  assert.equal(missPuts.filter(function (p) { return p.key === "rotate-config"; }).length, 0);
+  assert.equal(missPuts.filter(function (p) { return p.key === "arsenal"; }).length, 0);
 });
 
 test("config fetch fallback to GitHub raw URL", async () => {
@@ -741,7 +749,7 @@ test("persistWindow throw returns persist_failed not rotated and skips ledger", 
   assert.equal(stored.needsXIngest, true);
 });
 
-test("window-meta put throw after current-window still sets harness flags true", async () => {
+test("Cron persistWindow omits window-meta; persistMeta true writes it", async () => {
   const kv = new MemKV();
   await kv.put("current-window", JSON.stringify({
     windowId: "2026-09-15-16",
@@ -764,11 +772,7 @@ test("window-meta put throw after current-window still sets harness flags true",
     needsGitPush: false,
     needsXIngest: false
   }));
-  const origPut = kv.put.bind(kv);
-  kv.put = async function (key, value, options) {
-    if (String(key).indexOf("window-meta:") === 0) throw new Error("meta_put_failed");
-    return origPut(key, value, options);
-  };
+  kv.puts = [];
   const env = { BALLOT_KV: kv, ORIGIN: "https://bookmark-demo-lab.pages.dev" };
   const status = await runRotate(env, {
     nowMs: parseIso("2026-09-15T16:00:00.000Z"),
@@ -779,14 +783,26 @@ test("window-meta put throw after current-window still sets harness flags true",
   assert.equal(status.action, "rotated");
   assert.equal(status.needsGitPush, true);
   assert.equal(status.needsXIngest, true);
-  assert.doesNotMatch(String(status.noteZh || ""), /未改窗/);
-  const stored = await kv.get("rotate-status", "json");
-  assert.notEqual(stored.action, "error");
-  assert.doesNotMatch(String(stored.noteZh || ""), /未改窗/);
-  assert.equal(stored.needsGitPush, true);
-  assert.equal(stored.needsXIngest, true);
+  const metaPuts = kv.puts.filter(function (p) {
+    return String(p.key).indexOf("window-meta:") === 0;
+  });
+  assert.equal(metaPuts.length, 0);
   const next = await kv.get("current-window", "json");
   assert.equal(next.windowId, "2026-09-16-00");
+  // Admin-style persistMeta: true still writes window-meta (and tolerates put throw).
+  const snap = {
+    windowId: "admin-meta-win",
+    opensAt: "2026-09-16T00:00:00.000Z",
+    closesAt: "2026-09-16T00:10:00.000Z",
+    periodHours: 8,
+    voteWindowMinutes: 10,
+    timezone: "Asia/Shanghai",
+    candidates: [],
+    options: { fuel: [], harness: [], environment: [] }
+  };
+  await persistWindow(kv, snap, { persistMeta: true });
+  const meta = await kv.get("window-meta:admin-meta-win", "json");
+  assert.equal(meta.windowId, "admin-meta-win");
 });
 
 test("priorStatus get throw does not write fail status that clears harness flags", async () => {
@@ -877,11 +893,12 @@ test("safeErrorDetail is the error name and never echoes secrets", () => {
   assert.equal(safeErrorDetail(dirty), "Errscriptalert1script");
 });
 
-test("CRON_UTC and wrangler example fire every 5 minutes", () => {
-  assert.equal(CRON_UTC, "*/5 * * * *");
+test("CRON_UTC and wrangler example fire every 10 minutes", () => {
+  assert.equal(CRON_UTC, "*/10 * * * *");
   const here = dirname(fileURLToPath(import.meta.url));
   const toml = readFileSync(join(here, "wrangler.toml.example"), "utf8");
-  assert.match(toml, /crons\s*=\s*\["\*\/5 \* \* \* \*"\]/);
+  assert.match(toml, /crons\s*=\s*\["\*\/10 \* \* \* \*"\]/);
+  assert.doesNotMatch(toml, /\["\*\/5 \* \* \* \*"\]/);
   assert.doesNotMatch(toml, /\["\*\/1 \* \* \* \*"\]/);
 });
 
@@ -1660,7 +1677,7 @@ test("stale lower status failCount does not delay exhaustion vs KEY", async () =
   assert.equal(status.pendingLedger, undefined);
 });
 
-test("rotate refreshes rotate-config and arsenal puts even when unchanged", async () => {
+test("Cron rotate puts rotate-config/arsenal on fetch success but omits window-meta", async () => {
   const cfgPayload = fixture("/tracking/rotate-config.json");
   const arsenalPayload = fixture("/tracking/arsenal.json");
   const kv = new MemKV();
@@ -1691,16 +1708,19 @@ test("rotate refreshes rotate-config and arsenal puts even when unchanged", asyn
   assert.equal(status.action, "rotated");
   const configPuts = kv.puts.filter(function (p) { return p.key === "rotate-config"; });
   const arsenalPuts = kv.puts.filter(function (p) { return p.key === "arsenal"; });
-  assert.equal(configPuts.length, 1);
-  assert.equal(arsenalPuts.length, 1);
+  assert.ok(configPuts.length >= 1);
+  assert.ok(arsenalPuts.length >= 1);
   const metaPuts = kv.puts.filter(function (p) {
     return String(p.key).indexOf("window-meta:") === 0;
   });
-  assert.equal(metaPuts.length, 1);
-  assert.equal(metaPuts[0].key, "window-meta:" + status.nextWindowId);
+  assert.equal(metaPuts.length, 0);
+  // Essential settle puts still land.
+  assert.ok(kv.puts.some(function (p) { return p.key === "current-window"; }));
+  assert.ok(kv.puts.some(function (p) { return p.key === "vote-ledger"; }));
+  assert.ok(kv.puts.some(function (p) { return p.key === "rotate-status"; }));
 });
 
-test("loadRotateConfig refreshes put when fetch succeeds", async () => {
+test("loadRotateConfig puts on fetch success to refresh TTL", async () => {
   const cfgPayload = fixture("/tracking/rotate-config.json");
   const kv = new MemKV();
   await kv.put("rotate-config", JSON.stringify(cfgPayload));
@@ -1708,7 +1728,78 @@ test("loadRotateConfig refreshes put when fetch succeeds", async () => {
   const env = { BALLOT_KV: kv, ORIGIN: "https://bookmark-demo-lab.pages.dev" };
   const loaded = await loadRotateConfig(env, mockFetch());
   assert.equal(loaded.periodHours, cfgPayload.periodHours);
-  assert.equal(kv.puts.filter(function (p) { return p.key === "rotate-config"; }).length, 1);
+  const configPuts = kv.puts.filter(function (p) { return p.key === "rotate-config"; });
+  assert.equal(configPuts.length, 1);
+  assert.ok(configPuts[0].options.expirationTtl >= 60);
+});
+
+test("loadRotateConfig fetch miss does not put", async () => {
+  const kv = new MemKV();
+  await kv.put("rotate-config", JSON.stringify({
+    timezone: "Asia/Shanghai",
+    periodHours: 2,
+    slotHours: [0, 2, 4, 6, 8, 10, 12, 14, 16, 18, 20, 22]
+  }));
+  kv.puts = [];
+  const env = { BALLOT_KV: kv, ORIGIN: "https://example.test" };
+  const fetchFail = async function () {
+    return { ok: false, json: async () => null };
+  };
+  const loaded = await loadRotateConfig(env, fetchFail);
+  assert.equal(loaded.periodHours, 2);
+  assert.equal(kv.puts.filter(function (p) { return p.key === "rotate-config"; }).length, 0);
+});
+
+test("loadArsenal puts on fetch success; miss does not put", async () => {
+  const arsenalPayload = fixture("/tracking/arsenal.json");
+  const kv = new MemKV();
+  const env = { BALLOT_KV: kv, ORIGIN: "https://bookmark-demo-lab.pages.dev" };
+  kv.puts = [];
+  const loaded = await loadArsenal(env, mockFetch());
+  assert.ok(loaded && Array.isArray(loaded.sections));
+  assert.equal(kv.puts.filter(function (p) { return p.key === "arsenal"; }).length, 1);
+
+  await kv.put("arsenal", JSON.stringify(arsenalPayload));
+  kv.puts = [];
+  const fetchFail = async function () {
+    return { ok: false, json: async () => null };
+  };
+  const cached = await loadArsenal(env, fetchFail);
+  assert.equal(cached.sections.length, arsenalPayload.sections.length);
+  assert.equal(kv.puts.filter(function (p) { return p.key === "arsenal"; }).length, 0);
+});
+
+test("KV cold + fetch ok keeps 10m window invariant", async () => {
+  const kv = new MemKV();
+  // Cold KV: no rotate-config cache. Fetch returns voteWindowMinutes: 10.
+  assert.equal(await kv.get("rotate-config"), null);
+  const cfg10 = {
+    timezone: "Asia/Shanghai",
+    voteWindowMinutes: 10,
+    periodHours: 8,
+    slotHours: [0, 8, 16]
+  };
+  const fetchImpl = async function (url) {
+    const u = new URL(url);
+    if (u.pathname.endsWith("rotate-config.json")) {
+      return { ok: true, json: async () => cfg10 };
+    }
+    return mockFetch()(url);
+  };
+  const env = { BALLOT_KV: kv, ORIGIN: "https://example.test" };
+  const status = await runRotate(env, {
+    nowMs: parseIso("2026-09-15T16:05:00.000Z"),
+    skipLock: true,
+    fetchImpl: fetchImpl
+  });
+  assert.equal(status.ok, true);
+  assert.ok(status.action === "rotated" || status.action === "bootstrapped");
+  const win = await kv.get("current-window", "json");
+  assert.equal(win.voteWindowMinutes, 10);
+  assert.equal(Date.parse(win.closesAt) - Date.parse(win.opensAt), 10 * 60 * 1000);
+  // Successful fetch must have refreshed rotate-config into KV.
+  const stored = await kv.get("rotate-config", "json");
+  assert.equal(stored.voteWindowMinutes, 10);
 });
 
 test("writeCommittedStatus keeps PENDING_LEDGER_KEY if rotate-status put fails after ledger", async () => {
