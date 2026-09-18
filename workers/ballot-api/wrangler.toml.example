@@ -15,11 +15,11 @@ id = "REPLACE_WITH_KV_NAMESPACE_ID"
 
 # Cloudflare Workers Cron Triggers (UTC). NOT local crontab, NOT Grok Bot.
 # Primary: every 5 minutes (CRON_UTC in rotate.js) + zero-write skipped_open while the
-# vote window is open. 10-minute vote windows settle within ~5m of closesAt near the gate.
+# vote window is open. 10-minute vote windows settle on the first */5 tick after closesAt.
 # before_writes_est: ~1641/day observed with every-minute cron (lock/status on skip ticks).
-# after_writes_est: ≤~300/day avoidable cron-path writes (skip=0; cache-if-unchanged;
-#   no optimistic rotate-status; window-meta off on Cron persist). Essential settle puts
-#   (~5×rotates/day) are separate. */10 was interim; every-minute cron burned Free tier.
+# after_writes_est: ~0 avoidable on skipped_open; settle refreshes rotate-config/arsenal and
+#   writes window-meta (~1/rotate); no optimistic rotate-status. ~8–9 writes × rotates/day
+#   (~1300/day at 10m windows — Free-plan tight). Captain: no near-close gate; no cache-if-unchanged.
 # 8h expression 0 0,8,16 * * * is deprecated as the main narrative.
 # If your local untracked wrangler.toml still has 0 0,8,16 * * * or every-minute cron,
 # replace with this example before deploy.

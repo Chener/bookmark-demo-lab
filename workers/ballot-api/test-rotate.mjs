@@ -18,9 +18,6 @@ import {
   periodHours,
   voteWindowMinutes,
   CRON_UTC,
-  NEAR_CLOSE_MS,
-  isNearClose,
-  shouldActOnOpenWindow,
   loadRotateConfig,
   LOCK_TTL_S,
   KV_MIN_TTL_S,
@@ -888,15 +885,6 @@ test("CRON_UTC and wrangler example fire every 5 minutes", () => {
   assert.doesNotMatch(toml, /\["\*\/1 \* \* \* \*"\]/);
 });
 
-test("isNearClose and shouldActOnOpenWindow gate open-window polling", () => {
-  assert.equal(NEAR_CLOSE_MS, 150000);
-  const closes = parseIso("2026-09-15T16:00:00.000Z");
-  assert.equal(isNearClose(parseIso("2026-09-15T15:58:00.000Z"), closes), true);
-  assert.equal(shouldActOnOpenWindow(parseIso("2026-09-15T15:58:00.000Z"), closes), true);
-  assert.equal(isNearClose(parseIso("2026-09-15T12:29:00.000Z"), closes), false);
-  assert.equal(shouldActOnOpenWindow(parseIso("2026-09-15T12:29:00.000Z"), closes), false);
-});
-
 test("skipped_open does not put rotate-status", async () => {
   const kv = new MemKV();
   await kv.put("current-window", JSON.stringify({
@@ -1672,7 +1660,7 @@ test("stale lower status failCount does not delay exhaustion vs KEY", async () =
   assert.equal(status.pendingLedger, undefined);
 });
 
-test("unchanged rotate-config and arsenal skip redundant KV puts", async () => {
+test("rotate refreshes rotate-config and arsenal puts even when unchanged", async () => {
   const cfgPayload = fixture("/tracking/rotate-config.json");
   const arsenalPayload = fixture("/tracking/arsenal.json");
   const kv = new MemKV();
@@ -1703,11 +1691,16 @@ test("unchanged rotate-config and arsenal skip redundant KV puts", async () => {
   assert.equal(status.action, "rotated");
   const configPuts = kv.puts.filter(function (p) { return p.key === "rotate-config"; });
   const arsenalPuts = kv.puts.filter(function (p) { return p.key === "arsenal"; });
-  assert.equal(configPuts.length, 0);
-  assert.equal(arsenalPuts.length, 0);
+  assert.equal(configPuts.length, 1);
+  assert.equal(arsenalPuts.length, 1);
+  const metaPuts = kv.puts.filter(function (p) {
+    return String(p.key).indexOf("window-meta:") === 0;
+  });
+  assert.equal(metaPuts.length, 1);
+  assert.equal(metaPuts[0].key, "window-meta:" + status.nextWindowId);
 });
 
-test("loadRotateConfig skips put when cached JSON matches fetch", async () => {
+test("loadRotateConfig refreshes put when fetch succeeds", async () => {
   const cfgPayload = fixture("/tracking/rotate-config.json");
   const kv = new MemKV();
   await kv.put("rotate-config", JSON.stringify(cfgPayload));
@@ -1715,5 +1708,5 @@ test("loadRotateConfig skips put when cached JSON matches fetch", async () => {
   const env = { BALLOT_KV: kv, ORIGIN: "https://bookmark-demo-lab.pages.dev" };
   const loaded = await loadRotateConfig(env, mockFetch());
   assert.equal(loaded.periodHours, cfgPayload.periodHours);
-  assert.equal(kv.puts.filter(function (p) { return p.key === "rotate-config"; }).length, 0);
+  assert.equal(kv.puts.filter(function (p) { return p.key === "rotate-config"; }).length, 1);
 });
