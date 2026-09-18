@@ -522,14 +522,10 @@ export async function runRotate(env, opts) {
     });
     delete payload.pendingLedger;
     delete payload.error;
-    try {
-      await kv.delete(PENDING_LEDGER_KEY);
-    } catch (_) {
-      /* missing key is fine */
-    }
+    let wrote = false;
     try {
       await writeStatus(payload, false);
-      return payload;
+      wrote = true;
     } catch (_) {
       try {
         const prior = await kv.get("rotate-status", "json");
@@ -545,11 +541,19 @@ export async function runRotate(env, opts) {
         delete patched.error;
         delete patched.pendingLedger;
         await writeStatus(patched, false);
+        wrote = true;
       } catch (__) {
         /* return in-memory flags-true status; never write 未改窗 */
       }
-      return payload;
     }
+    if (wrote) {
+      try {
+        await kv.delete(PENDING_LEDGER_KEY);
+      } catch (_) {
+        /* missing key is fine */
+      }
+    }
+    return payload;
   };
 
   let priorStatus = null;
