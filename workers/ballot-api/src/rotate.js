@@ -667,11 +667,9 @@ export async function runRotate(env, opts) {
             status: status
           };
         }
-        try {
-          await kv.delete(PENDING_LEDGER_KEY);
-        } catch (_) {
-          /* missing key is fine */
-        }
+        // Keep PENDING_LEDGER_KEY until writeCommittedStatus durably puts
+        // rotate-status (then deletes KEY). Deleting here left a gap where
+        // ledger was rewritten but status put failed → no KEY, no flags.
         if (priorStatus) delete priorStatus.pendingLedger;
         return {
           ok: true,
