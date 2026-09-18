@@ -1,23 +1,88 @@
 {
   "version": 1,
-  "windowId": "2026-09-16-08",
+  "windowId": "2026-09-18-1510",
   "timezone": "Asia/Shanghai",
   "periodHours": 8,
-  "opensAt": "2026-09-16T00:00:00.000Z",
-  "closesAt": "2026-09-16T08:00:00.000Z",
+  "voteWindowMinutes": 10,
+  "opensAt": "2026-09-18T07:10:00.000Z",
+  "closesAt": "2026-09-18T07:20:00.000Z",
   "candidates": [
     {
-      "id": "2100039609958727756",
-      "url": "https://x.com/i/status/2100039609958727756",
-      "titleZh": "Jev plays doom in realtime and it looks like an …",
-      "author": "ziwenxu_",
-      "planZh": "把 @ziwenxu_ 这条关于「Jev plays doom in realtime and it looks like an actual playe」的演示做成可点 sticky demo：保留原帖核心交互/视觉，中文说明 + 一页可玩。技术栈待枢纽投票（燃料/harness/7×24）。",
-      "rationaleZh": "实时复现经典Doom核心体验，保留原帖高拟真操作手感与纯前端交互。",
-      "suggestedSlug": "jev-plays-doom-in-realtime-and",
+      "id": "2100114481934455236",
+      "url": "https://x.com/i/status/2100114481934455236",
+      "titleZh": "看图写三种风格 caption（正经 / 搞笑 / 问句）",
+      "author": "Chris62771610",
+      "planZh": "把 @Chris62771610 这条「对着电脑说话写三种 caption」做成中文 sticky：选图 → 一键出正…",
+      "rationaleZh": "有清晰可点面：上传/选图 + 出三种社媒配文风格；适合 sticky 假生成或接模型。非整段观点帖。",
+      "suggestedSlug": "social-caption-trio",
       "status": "open",
-      "source": "firstmate-x-mcp-slim",
-      "periodField": "created_at",
-      "periodAt": "2026-09-16T01:50:34.000Z"
+      "source": "ship-mcp-poll"
+    },
+    {
+      "id": "2099892615160201384",
+      "url": "https://x.com/i/status/2099892615160201384",
+      "titleZh": "Three.js 卡通着色科幻场景",
+      "author": "taylor_sntx",
+      "planZh": "把 @taylor_sntx 的 toon shader 科幻审美做成中文 sticky：旋转场景 + 卡通描边/光照…",
+      "rationaleZh": "有视频可点面：浏览器里 three.js toon shader 科幻美学；适合 sticky 交互场景/材质切换演示。",
+      "suggestedSlug": "threejs-toon-scifi",
+      "status": "open",
+      "source": "ship-mcp-poll"
+    },
+    {
+      "id": "2100042788851101842",
+      "url": "https://x.com/i/status/2100042788851101842",
+      "titleZh": "邮件智能分类演示",
+      "author": "ryanvogel",
+      "planZh": "把 @ryanvogel 邮件分类做成中文 sticky：粘贴邮件正文 → 输出类别/优先级卡；可先规则/假模型演示，…",
+      "rationaleZh": "有清晰可点面：粘贴/导入邮件 → 分类标签；原帖有视频与自测规模，适合 sticky 假分类或接模型。",
+      "suggestedSlug": "email-classify-demo",
+      "status": "open",
+      "source": "ship-mcp-poll"
+    },
+    {
+      "id": "2100470174130250127",
+      "url": "https://x.com/i/status/2100470174130250127",
+      "titleZh": "用真实权重模拟 X 推荐与传播",
+      "author": "leojrr",
+      "planZh": "把 @leojrr 的 X 算法复刻做成中文 sticky：输入一条帖 → 展示权重拆解/传播预测 + 模拟全局 fe…",
+      "rationaleZh": "有清晰可点面：写帖/调权重 → 看传播预测与模拟信息流；原帖列出真实权重、virality、全局 feed，适合小体积 sticky。",
+      "suggestedSlug": "x-algo-sim",
+      "status": "open",
+      "source": "cli-x-poll"
+    },
+    {
+      "id": "2100492591871767026",
+      "url": "https://x.com/i/status/2100492591871767026",
+      "titleZh": "17MB 零加载的星球快递",
+      "author": "ErwinWu000",
+      "planZh": "把 @ErwinWu000 安利的 messenger.abeto.co（小星球送货）做成中文 sticky：点选/驾…",
+      "rationaleZh": "有清晰可点面：浏览器里即时加载的星球送货互动；原帖强调 17MB/零加载/高密度素材，作者回复给出 messenger.abeto.co，适合小体积 sticky 复刻交互核。",
+      "suggestedSlug": "planet-messenger",
+      "status": "open",
+      "source": "cli-x-poll"
+    },
+    {
+      "id": "2100628846240264348",
+      "url": "https://x.com/i/status/2100628846240264348",
+      "titleZh": "用 JEV 毫秒级点选网页元素",
+      "author": "SUOHA_AI",
+      "planZh": "把 @SUOHA_AI 的 Browser Use + JEV 做成中文 sticky：展示假页面/查机票步骤 → 逐…",
+      "rationaleZh": "有清晰可点面：展示网页 DOM → 毫秒级标出该点元素/下一步；原帖给出 7 秒查机票、分类题式点选与 jev-ultrafast 仓库，适合小体积 sticky 假分类演示。",
+      "suggestedSlug": "jev-dom-click",
+      "status": "open",
+      "source": "cli-x-poll"
+    },
+    {
+      "id": "2100425868053008758",
+      "url": "https://x.com/i/status/2100425868053008758",
+      "titleZh": "边写边评的病毒帖分析器",
+      "author": "rileybrown",
+      "planZh": "把 @rileybrown 的 live viral analyzer 做成中文 sticky：写帖停 0.5 秒 →…",
+      "rationaleZh": "有清晰可点面：写帖/停输入 → 看病毒分与分类；原帖有视频、0.5 秒防抖与直播分类，适合小体积 sticky 假分析。",
+      "suggestedSlug": "live-viral-analyzer",
+      "status": "open",
+      "source": "cli-x-poll"
     }
   ],
   "options": {
@@ -38,5 +103,5 @@
       "自购 VPS / 便宜 KVM"
     ]
   },
-  "ingestNoteZh": "本窗候选 1 条：来自 Firstmate X MCP slim（page1），按 2026-09-16T00:00Z≤t<2026-09-16T08:00Z 过滤（优先 bookmarked_at，本页仅有 created_at）。已跳过 seen / 窗外。绝不伪造书签。 仍可投燃料 / harness / 7×24。"
+  "ingestNoteZh": "slim ingest live（bm-slim-ingest-live RETRY）：写入 7 条 worth 候选（含 rationaleZh；planZh 截断以适配 BODY_MAX 4096）。排除 hold/doom。"
 }
