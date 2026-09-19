@@ -28,6 +28,9 @@ from typing import Any
 from zoneinfo import ZoneInfo
 
 ROOT = Path(__file__).resolve().parents[1]
+# Cloudflare edge 403s Python's default urllib UA; identify this harness.
+HTTP_UA = "bookmark-demo-lab/rotate-beat (+https://xdemo.chenerpath.com)"
+
 TRACKING = ROOT / "tracking"
 CONFIG_PATH = TRACKING / "rotate-config.json"
 ARSENAL_PATH = TRACKING / "arsenal.json"
@@ -276,7 +279,7 @@ def fetch_worker_json(base: str, path: str) -> dict[str, Any] | None:
     if not base:
         return None
     url = f"{base}{path}"
-    req = urllib.request.Request(url, method="GET")
+    req = urllib.request.Request(url, method="GET", headers={"User-Agent": HTTP_UA})
     try:
         with urllib.request.urlopen(req, timeout=20) as res:
             data = json.loads(res.read().decode("utf-8"))
@@ -381,6 +384,7 @@ def ack_rotate_flags(base: str, token: str, *, needs_git_push: bool | None = Non
         headers={
             "Content-Type": "application/json",
             "Authorization": f"Bearer {token}",
+            "User-Agent": HTTP_UA,
         },
     )
     try:
@@ -399,7 +403,7 @@ def fetch_tallies(base: str, window_id: str) -> dict[str, Any]:
             "voteApiBase / VOTE_API_BASE is empty; refusing to treat as zero votes",
         )
     url = f"{base}/api/vote?windowId={quote(window_id, safe='')}"
-    req = urllib.request.Request(url, method="GET")
+    req = urllib.request.Request(url, method="GET", headers={"User-Agent": HTTP_UA})
     try:
         with urllib.request.urlopen(req, timeout=20) as res:
             raw = res.read().decode("utf-8")
@@ -428,6 +432,7 @@ def put_window(base: str, token: str, ballot: dict) -> None:
         headers={
             "Content-Type": "application/json",
             "Authorization": f"Bearer {token}",
+            "User-Agent": HTTP_UA,
         },
     )
     try:
