@@ -19,13 +19,13 @@ index.html                        # 枢纽：卡片 + 待投票 + 军火库 + �
 hub.css / hub.js                  # 枢纽样式与投票/军火库逻辑（静态，不进 Worker）
 ```
 
-枢纽与演示仍是 **静态 Cloudflare Pages**（Framework preset: None，构建命令留空，输出目录 `/`）。不要自定义域名、CNAME、Workers Builds，也不要另开 Pages/Workers 项目。
+枢纽与演示是 **Cloudflare Pages** 项目 `bookmark-demo-lab`（Direct Upload，经 `wrangler pages deploy` / GitHub Actions 发布；纯静态，无构建）。生产域名 **https://xdemo.chenerpath.com**（DNSPod CNAME → `bookmark-demo-lab.pages.dev`）。**每个 demo 一个 PR，一个 PR 一个预览**：PR 自动部署到 `https://pr-<号>.bookmark-demo-lab.pages.dev` 并回帖链接。
 
 唯一例外：静态 Pages **无法按 IP 做「每窗一票」**，因此本仓库附带 **一个** Worker + KV（`workers/ballot-api/`）：`GET/POST /api/vote`、窗快照、以及 **Cloudflare Workers Cron Triggers** 的 slim 转窗。不要再加第二个 Worker 或 Pages Function。仓库里是 `wrangler.toml.example`，避免 Pages 误走 Workers Builds。
 
 ## 10 分钟投票轮转（上海）
 
-Captain 产品节拍默认 **Asia/Shanghai、`voteWindowMinutes=10`**（写在 `tracking/rotate-config.json`）：`closesAt = opensAt + 10 分钟`。窗在时区内按该时长 **向下取整对齐**（不再读 `slotHours`）。Worker Cron **每分钟**（UTC `*/1 * * * *`）结算刚关闭的窗。旧的 **8 小时整点窗**（`periodHours=8`、cron `0 0,8,16 * * *`）只作为遗留字段保留，**不再是主叙事**。
+Captain 产品节拍默认 **Asia/Shanghai、`voteWindowMinutes=10`**（写在 `tracking/rotate-config.json`）：`closesAt = opensAt + 10 分钟`。窗在时区内按该时长 **向下取整对齐**（不再读 `slotHours`）。Worker Cron **每 10 分钟**（UTC `*/10 * * * *`）结算刚关闭的窗。旧的 **8 小时整点窗**（`periodHours=8`、cron `0 0,8,16 * * *`）只作为遗留字段保留，**不再是主叙事**。
 
 每个 beat：
 
@@ -50,34 +50,13 @@ Captain 产品节拍默认 **Asia/Shanghai、`voteWindowMinutes=10`**（写在 `
 - **禁止** GitHub Issue / 评论当票箱，也 **没有** 站外提交 X 链接的表单。
 - 实时计票来自 `GET /api/vote`；接口未绑定时只读 `vote-ledger.json`。
 
-### Vote Worker + KV（干净账号：只允许 1 Worker + 1 KV）
+### Vote Worker + KV
 
-干净 Cloudflare 账号部署清单。**只创建 1 个 Worker + 1 个 KV**。禁止再开/删除其它 Workers 或 Pages 项目，禁止 Workers Builds，禁止自定义域 / CNAME。
+后端 = **1 个 Worker（`ballot-api`）+ 1 个 KV（`ballot-votes`）**：`GET/POST /api/vote`、窗快照、Workers Cron 转窗（`*/10 * * * *` UTC）。源码 `workers/ballot-api/src/index.js`。
 
-源码：`workers/ballot-api/src/index.js`。在本机或已有云电脑执行（**不要**从 Pages 再开项目）：
+部署走 GitHub Actions（`.github/workflows/deploy-worker.yml`）：`workers/ballot-api/**` 一变就 `wrangler deploy`；`wrangler.toml` 不进仓库（CI 内现场生成：KV `ballot-votes` id、`[vars] ORIGIN=https://xdemo.chenerpath.com`、`RAW_BASE` 指向 GitHub raw）。CORS 只放行生产域名 + localhost。
 
-```bash
-cd workers/ballot-api
-cp wrangler.toml.example wrangler.toml   # 已 gitignore，勿提交
-
-# 1) 仅一次：创建名为 ballot-votes 的 KV，把返回的 id 写入 wrangler.toml [[kv_namespaces]].id
-npx wrangler kv namespace create ballot-votes
-
-# 2) 确认 wrangler.toml：
-#    name = "ballot-api"
-#    [triggers] crons = ["*/1 * * * *"]
-#    [vars] ORIGIN = 现有 Pages 生产 URL（如 https://bookmark-demo-lab.pages.dev）
-#    [vars] RAW_BASE = https://raw.githubusercontent.com/Chener/bookmark-demo-lab/main
-
-# 3) 两个 secrets（必填；不要写进仓库）
-npx wrangler secret put VOTE_SALT
-npx wrangler secret put BALLOT_ADMIN_TOKEN
-
-# 4) 部署同一个 Worker（会带上 Cron Trigger）
-npx wrangler deploy
-```
-
-部署成功后终端会打印 `https://ballot-api.<account-subdomain>.workers.dev`。把该 URL（**不要尾斜杠**）写入 `tracking/rotate-config.json` 的 `voteApiBase`，提交并推 `main`，枢纽才能跨域 POST。
+两个 Worker secrets（`VOTE_SALT`、`BALLOT_ADMIN_TOKEN`）只活在 Cloudflare 侧，**不要**写进仓库；`tracking/rotate-config.json` 的 `voteApiBase` 指向 `https://ballot-api.chenhuitf2.workers.dev`（无尾斜杠），枢纽跨域 POST 靠它。
 
 | 资源 | 名称 | 数量 |
 | --- | --- | --- |
@@ -196,22 +175,16 @@ python 回退路径：Vote API 失败或 `voteApiBase` 为空则 **中止**（�
 | [`/apps/remotion-tear/`](apps/remotion-tear/) | [Codex+Remotion 怀旧撕纸短片](https://x.com/xl_lottie/status/2099342984433324435) |
 | [`/apps/obsidian-ui/`](apps/obsidian-ui/) | [ObsidianUI 组件库氛围](https://x.com/dhruvtwt_/status/2099548790470640118) |
 
-## Cloudflare Pages 一次性配置
+## 部署现状（2026-09-19 起，全部自动化）
 
-1. 打开 [Cloudflare Dashboard](https://dash.cloudflare.com/) → **Workers & Pages** → **Create** → **Pages** → **Connect to Git**
-2. 授权 GitHub，选择仓库 **`Chener/bookmark-demo-lab`**
-3. Build settings:
-   - **Framework preset:** None / 以后若用 Vite 再选 Vite
-   - **Build command:** 纯静态留空，或 `npm run build`
-   - **Build output directory:** 静态根目录填 `/`，Vite 则填 `dist`
-4. 在 **Settings → Builds & deployments → Branch deployments**：
-   - Production branch: `main`
-   - **Preview deployments:** 对所有非生产分支开启（多数账号默认已开）
-5. 保存。之后每次推送新分支都会得到类似地址：
-   `https://<branch-name>.bookmark-demo-lab-<hash>.pages.dev`
+- **Pages 项目** `bookmark-demo-lab` 已存在（Direct Upload，**不走** Connect to Git / GitHub App 授权）。
+- `.github/workflows/deploy-pages.yml`：push `main`（`tracking/**` 除外）→ 生产部署；PR → 预览部署 `https://pr-<号>.bookmark-demo-lab.pages.dev` 并自动回帖链接。
+- `.github/workflows/deploy-worker.yml`：`workers/ballot-api/**` 变更 → `wrangler deploy`。
+- `.github/workflows/sync-harness.yml`：每 15 分钟跑 `scripts/rotate-beat.py`，把 KV 窗快照同步进 `tracking/` 并 push（`tracking/**` 的提交不触发 Pages 重部署，避免部署刷屏）。
+- 生产域名 **https://xdemo.chenerpath.com**（DNSPod CNAME → `bookmark-demo-lab.pages.dev`，Pages 侧已绑自定义域）。
+- 仓库 Secrets：`CLOUDFLARE_API_TOKEN`、`CLOUDFLARE_ACCOUNT_ID`（已配）。
 
-预览时检查：`/`（枢纽，含「待投票」）、`/apps/gsap-canvas/`、`/apps/clapper/`、`/apps/llm-arch-3d/`、`/apps/remotion-tear/` 和 `/apps/obsidian-ui/`。Vote Worker 是独立最小后端，不要从 Pages 再开第二个项目。
-
+预览时检查：`/`（枢纽，含「待投票」）、`/apps/gsap-canvas/`、`/apps/clapper/`、`/apps/llm-arch-3d/`、`/apps/remotion-tear/` 和 `/apps/obsidian-ui/`。
 ## Agent 工作流
 
 1. Cloud Agent 切分支（始终同一仓库，不要一演示一仓库）

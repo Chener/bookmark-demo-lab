@@ -1,7 +1,7 @@
 # Copy to wrangler.toml locally (do not commit the copy).
 # This Worker is the only backend: vote POST + tally GET + KV IP dedupe + Cron rotate.
-# Do not create extra Workers/Pages projects, custom domains, CNAME, or Workers Builds.
-# Clean Cloudflare account: exactly 1 Worker (ballot-api) + 1 KV (ballot-votes).
+# Deploy targets: 1 Worker (ballot-api) + 1 KV (ballot-votes) + 1 Pages project
+# (bookmark-demo-lab, custom domain xdemo.chenerpath.com). See README.
 
 name = "ballot-api"
 main = "src/index.js"
@@ -30,7 +30,7 @@ crons = ["*/10 * * * *"]
 
 [vars]
 # Production Pages origin (Worker fetches rotate-config / ballot-window / arsenal).
-ORIGIN = "https://bookmark-demo-lab.pages.dev"
+ORIGIN = "https://xdemo.chenerpath.com"
 # GitHub raw fallback when Pages origin is unreachable (same files, main branch).
 RAW_BASE = "https://raw.githubusercontent.com/Chener/bookmark-demo-lab/main"
 
