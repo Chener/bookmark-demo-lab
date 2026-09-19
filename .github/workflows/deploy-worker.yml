@@ -1,0 +1,41 @@
+name: Deploy ballot-api Worker
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'workers/ballot-api/**'
+  workflow_dispatch:
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - run: npm install -g wrangler
+      - name: Deploy worker
+        working-directory: workers/ballot-api
+        run: |
+          cat > wrangler.toml <<'TOML'
+          name = "ballot-api"
+          main = "src/index.js"
+          compatibility_date = "2026-09-15"
+
+          [[kv_namespaces]]
+          binding = "BALLOT_KV"
+          id = "3c29a1fc8bc54f70880ff4e4da5fb9a7"
+
+          [triggers]
+          crons = ["*/10 * * * *"]
+
+          [vars]
+          ORIGIN = "https://xdemo.chenerpath.com"
+          RAW_BASE = "https://raw.githubusercontent.com/Chener/bookmark-demo-lab/main"
+          TOML
+          npx wrangler deploy
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
