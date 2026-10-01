@@ -1,7 +1,7 @@
 {
   "version": 1,
-  "lastSettleAt": "2026-09-30T20:10:55.000Z",
-  "settledWindowId": "2026-10-01-0400",
+  "lastSettleAt": "2026-10-01T00:00:55.000Z",
+  "settledWindowId": "2026-10-01-0750",
   "voteCount": 0,
   "tallySource": "kv",
   "tallies": {
