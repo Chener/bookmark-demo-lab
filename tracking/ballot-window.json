@@ -1,10 +1,10 @@
 {
   "version": 1,
-  "windowId": "2026-10-31-0750",
+  "windowId": "2026-10-31-1210",
   "timezone": "Asia/Shanghai",
   "periodHours": 8,
-  "opensAt": "2026-10-30T23:50:00.000Z",
-  "closesAt": "2026-10-31T00:00:00.000Z",
+  "opensAt": "2026-10-31T04:10:00.000Z",
+  "closesAt": "2026-10-31T04:20:00.000Z",
   "candidates": [],
   "options": {
     "fuel": [
